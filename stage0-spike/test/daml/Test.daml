@@ -1,0 +1,79 @@
+-- Stage-0 gate Script. Run with `dpm test`. Proves, in one end-to-end scenario:
+--   (1) ATOMIC two-asset swap — both legs settle in a single transaction
+--   (2) PRIVACY        — a non-stakeholder (Carol) is never shown the contracts
+--   (3) AUTHORIZATION  — a non-owner cannot move assets / accept others' swaps
+module Test where
+
+import Main
+import Daml.Script
+import DA.Optional (isNone)
+import DA.Assert ((===))
+
+atomicSwap : Script ()
+atomicSwap = script do
+  alice <- allocatePartyByHint (PartyIdHint "Alice")
+  bob   <- allocatePartyByHint (PartyIdHint "Bob")
+  carol <- allocatePartyByHint (PartyIdHint "Carol")   -- the curious bystander
+
+  -- Each party self-issues an asset.
+  aliceTV <- submit alice do
+    createCmd Asset with issuer = alice, owner = alice, name = "TV"
+  bobRadio <- submit bob do
+    createCmd Asset with issuer = bob, owner = bob, name = "Radio"
+
+  -- Alice escrows her TV into a swap proposal asking for Bob's Radio.
+  prop <- submit alice do
+    exerciseCmd aliceTV OfferInSwap with accepter = bob, accepterAsset = bobRadio
+
+  ----------------------------------------------------------------------------
+  -- (3) AUTHORIZATION: Carol can neither accept a swap she is not party to,
+  --     nor move an asset she does not own. The ledger must reject both.
+  ----------------------------------------------------------------------------
+  submitMustFail carol do exerciseCmd prop AcceptSwap
+  submitMustFail carol do exerciseCmd bobRadio Give with newOwner = carol
+
+  ----------------------------------------------------------------------------
+  -- (1) ATOMIC SWAP: Bob accepts → BOTH legs move in ONE transaction.
+  ----------------------------------------------------------------------------
+  (accepterGets, proposerGets) <- submit bob do exerciseCmd prop AcceptSwap
+
+  -- Ownership actually flipped.
+  Some tvNow <- queryContractId bob accepterGets
+  tvNow.owner === bob
+  tvNow.name === "TV"
+  Some radioNow <- queryContractId alice proposerGets
+  radioNow.owner === alice
+  radioNow.name === "Radio"
+
+  ----------------------------------------------------------------------------
+  -- (2) PRIVACY: Carol is on neither asset's stakeholder set, so the ledger
+  --     never reveals them to her — queryContractId returns None and a full
+  --     query as Carol yields nothing. Privacy by protocol, not by app.
+  ----------------------------------------------------------------------------
+  carolSeesTV <- queryContractId carol accepterGets
+  assertMsg "Carol must NOT see the swapped TV" (isNone carolSeesTV)
+  carolSeesRadio <- queryContractId carol proposerGets
+  assertMsg "Carol must NOT see the swapped Radio" (isNone carolSeesRadio)
+  carolAssets <- query @Asset carol
+  assertMsg "Carol's asset view must be empty" (length carolAssets == 0)
+
+  pure ()
+
+-- Seeds a LIVE sandbox with AtomicNet's party set + a sample contract, for the
+-- Stage-0 JSON Ledger API smoke test. Run against the running sandbox with:
+--   dpm script --dar <test.dar> --script-name Test:seedLedger \
+--     --ledger-host localhost --ledger-port 6865 --wall-clock-time
+seedLedger : Script ()
+seedLedger = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  _subUK    <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  _subDE    <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  _regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+  -- Bank issues a sample deposit-like asset to Sub_US so the JSON Ledger API has
+  -- a real contract to read back. (signatory bank, observer subUS.)
+  _ <- submit bank do
+    createCmd Asset with issuer = bank, owner = subUS, name = "USD-1000000"
+  debug ("Seeded AtomicNet parties: " <> show [operator, subUS, bank])
+  pure ()

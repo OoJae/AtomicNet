@@ -1,0 +1,76 @@
+-- Stage-0 spike (THROWAWAY): proves the core Canton mechanics AtomicNet relies on,
+-- before any application contracts are written:
+--   * authority propagation (controllers ∪ signatories of the exercised contract)
+--   * atomic multi-leg settlement (all legs in ONE transaction, or none)
+--   * sub-transaction privacy (a non-stakeholder is never told the contract exists)
+--   * the escrow/allocation pattern that makes an atomic swap both AUTHORIZED and
+--     VISIBLE to the settling party (the same idea as AtomicNet's DepositAllocation).
+module Main where
+
+type AssetId = ContractId Asset
+
+-- A trivial tokenised asset. For the spike each party self-issues (issuer == owner);
+-- the real model (Stage 2) replaces this with Bank-issued Deposits + co-signed allocations.
+template Asset
+  with
+    issuer : Party
+    owner  : Party
+    name   : Text
+  where
+    ensure name /= ""
+    signatory issuer
+    observer owner
+
+    -- Transfer ownership. Controlled by the current owner; the successor contract is
+    -- still signed by `issuer` (whose authority is surfaced from this Asset's signatory
+    -- while the choice runs).
+    choice Give : AssetId
+      with
+        newOwner : Party
+      controller owner
+      do create this with owner = newOwner
+
+    -- Owner escrows this asset into a swap proposal. CONSUMING — the asset is archived
+    -- now, so it can't be double-offered, and the proposal is co-signed by `issuer`
+    -- (authority surfaced from this Asset's signatory) so the asset re-minted for the
+    -- counterparty on accept is authentic. This is the spike's analogue of locking funds
+    -- into a co-signed allocation before settlement.
+    choice OfferInSwap : ContractId SwapProposal
+      with
+        accepter      : Party
+        accepterAsset : AssetId   -- the counterparty's asset wanted in return
+      controller owner
+      do create SwapProposal with
+           proposer = owner
+           accepter
+           offeredIssuer = issuer
+           offeredName = name
+           accepterAsset
+
+-- The escrowed offer. Visible to the accepter (observer) so they can settle it.
+template SwapProposal
+  with
+    proposer      : Party
+    accepter      : Party
+    offeredIssuer : Party    -- issuer of the escrowed asset; co-signs for authenticity
+    offeredName   : Text
+    accepterAsset : AssetId  -- the accepter's own asset, which they can see and move
+  where
+    signatory proposer, offeredIssuer
+    observer accepter
+
+    -- The accepter completes BOTH legs in ONE transaction. Authority inside the choice
+    -- is {accepter} ∪ {proposer, offeredIssuer} — exactly enough to (a) mint the escrowed
+    -- asset to the accepter and (b) move the accepter's own asset to the proposer. If
+    -- either leg fails the whole transaction rolls back: no partial swap, no exposure.
+    choice AcceptSwap : (AssetId, AssetId)
+      controller accepter
+      do
+        accepterGets <- create Asset with issuer = offeredIssuer, owner = accepter, name = offeredName
+        proposerGets <- exercise accepterAsset Give with newOwner = proposer
+        pure (accepterGets, proposerGets)
+
+    -- Declined: return the escrowed asset to the proposer.
+    choice RejectSwap : AssetId
+      controller accepter
+      do create Asset with issuer = offeredIssuer, owner = proposer, name = offeredName

@@ -1,0 +1,10 @@
+sdk-version: 3.5.1
+name: stage0-spike-test
+source: daml
+version: 0.0.1
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+data-dependencies:
+  - ../main/.daml/dist/stage0-spike-main-0.0.1.dar

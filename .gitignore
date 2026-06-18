@@ -1,0 +1,35 @@
+# --- Secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
+
+# --- Daml / dpm build artifacts ---
+.daml/
+*.dar
+.dpm/
+
+# --- Node / frontend / backend ---
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.pnpm-store/
+
+# --- Canton / sandbox runtime ---
+log/
+canton.log
+*.log
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+# keep shared VS Code config, ignore personal
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# --- Claude Code (personal/local) ---
+.claude/settings.local.json
