@@ -11,7 +11,7 @@ AtomicNet lets the subsidiaries of a multinational settle their intercompany inv
 - ✅ **Stage 1** — Daml core (Invoice propose/accept, Cycle, NetPosition → ApprovedNetPosition) + happy-path lifecycle test.
 - ✅ **Stage 2** — tokenized cash (Deposit / DepositAllocation) + atomic single-currency settlement; `settlement` + `atomicity` tests green.
 - ✅ **Stage 3** — multi-currency FX netting → atomic USD settlement; TypeScript netting service; full Daml test suite. **7 Daml scripts + 8 netting tests green.**
-- ⬜ Stage 4 — Node/TS backend + React frontend + AI treasury agent
+- ✅ **Stage 4** — full-stack app: Node/TS backend (JSON Ledger API bridge, reads AS the party), React+Vite institutional frontend (party switcher, Gross→Net viz, live privacy proof, regulator view), and a human-in-the-loop AI treasury agent (MiMo v2.5 Pro) that proposes but cannot settle.
 - ⬜ Stage 5 — demo dataset, polish, hosted demo, CI
 
 ## What the tests prove

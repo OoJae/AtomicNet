@@ -5,6 +5,7 @@ import { allocateOrReuse, submit, activeContracts, ofTemplate, type Contract } f
 import { T, QN, create, exercise, dec, tuple2, tuple3 } from "../ledger/templates.ts";
 import { computeNetPositions, buildSettlementPlan, reductionRatio, type Invoice, type NetPosition } from "../netting/netting.ts";
 import type { FxRate } from "../netting/fx.ts";
+import * as agent from "../agent/agent.ts";
 
 const PARTY_NAMES = ["Operator", "Sub_US", "Sub_UK", "Sub_DE", "Bank", "Regulator"];
 const SUBS = ["Sub_US", "Sub_UK", "Sub_DE"];
@@ -264,4 +265,18 @@ export async function runDemo() {
   for (const s of SUBS) await allocate(s, cycleId);
   const settled = await settle(cycleId);
   return { cycleId, nets: locked.nets, ...settled };
+}
+
+/** Ask the AI treasury agent to draft a netting cycle from the OPERATOR-visible invoices.
+ *  Returns a proposal + rationale only — there is NO path from here to settlement. */
+export async function agentPropose() {
+  const op = parties.Operator!;
+  const invoices = ofTemplate(await activeContracts(op), QN.IntercompanyInvoice).map((c) => ({
+    invoiceId: c.payload.invoiceId,
+    issuer: nameOf(c.payload.issuer),
+    payer: nameOf(c.payload.payer),
+    amount: num(c.payload.amount),
+    currency: c.payload.currency,
+  }));
+  return agent.propose({ invoices, settlementCurrency: "USD" });
 }
