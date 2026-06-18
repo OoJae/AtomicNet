@@ -1,0 +1,67 @@
+-- Stage-2 happy-path atomic settlement. Run with `dpm test`.
+-- Proves: net payers earmark their |net|; the operator settles ALL legs in one transaction;
+-- final balances = opening +/- net; and total cash is conserved.
+module AtomicNet.Test.Settlement where
+
+import AtomicNet.Types
+import AtomicNet.Cash
+import AtomicNet.Settlement
+
+import Daml.Script
+import DA.Assert ((===))
+
+-- Sum a party's visible Deposit balances in a currency (queried AS the party, so the
+-- ledger's privacy does the filtering -- a sub only sees its own deposits).
+balanceOf : Party -> CurrencyCode -> Script Decimal
+balanceOf p ccy = do
+  ds <- query @Deposit p
+  pure (sum [ d.amount | (_, d) <- ds, d.currency == ccy, d.owner == p ])
+
+settlement : Script ()
+settlement = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  -- Bank issues opening deposits: 1000 USD to each subsidiary.
+  let issue owner = submit bank do
+        createCmd Deposit with bank, owner, currency = "USD", amount = 1000.0
+  depUS  <- issue subUS
+  _depUK <- issue subUK
+  depDE  <- issue subDE
+
+  -- Net positions (from the lifecycle): US -400, DE -200, UK +600. The two net payers
+  -- earmark exactly their |net| via a bank+owner co-signed allocation.
+  (allocUS, _remUS) <- submit subUS do
+    exerciseCmd depUS Allocate with operator, allocAmount = 400.0, cycleId = "CYCLE-2026-06"
+  (allocDE, _remDE) <- submit subDE do
+    exerciseCmd depDE Allocate with operator, allocAmount = 200.0, cycleId = "CYCLE-2026-06"
+
+  -- Operator assembles the batch: US pays UK 400, DE pays UK 200; UK should net +600.
+  batch <- submit operator do
+    createCmd SettlementBatch with
+      operator
+      regulator
+      cycleId = "CYCLE-2026-06"
+      transfers = [(allocUS, subUK, 400.0), (allocDE, subUK, 200.0)]
+      payouts = [(subUK, 600.0)]
+
+  -- ONE atomic transaction settles every leg.
+  _newDeposits <- submit operator do exerciseCmd batch ExecuteSettlement
+
+  -- Final balances = opening +/- net.
+  usBal <- balanceOf subUS "USD"
+  usBal === 600.0
+  ukBal <- balanceOf subUK "USD"
+  ukBal === 1600.0
+  deBal <- balanceOf subDE "USD"
+  deBal === 800.0
+
+  -- System-wide cash conserved (the bank signs every Deposit, so it sees them all).
+  allDeposits <- query @Deposit bank
+  (sum [ d.amount | (_, d) <- allDeposits, d.currency == "USD" ]) === 3000.0
+
+  pure ()

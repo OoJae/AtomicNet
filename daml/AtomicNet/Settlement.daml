@@ -1,0 +1,43 @@
+-- Atomic settlement. The operator assembles a SettlementBatch of pre-authorized transfers
+-- (each backed by a payer's bank+owner co-signed DepositAllocation) and executes them in ONE
+-- transaction. Per-receiver totals AND system conservation are checked inside the choice, so
+-- any shortfall reverts the entire settlement: no partial settlement, no exposure.
+module AtomicNet.Settlement where
+
+import AtomicNet.Cash
+import DA.Foldable (forA_)   -- forA_ is NOT re-exported by Prelude; it lives in DA.Foldable
+
+template SettlementBatch
+  with
+    operator  : Party
+    regulator : Party
+    cycleId   : Text
+    transfers : [(ContractId DepositAllocation, Party, Decimal)]   -- (payer allocation, receiver, amount to pay)
+    payouts   : [(Party, Decimal)]                                 -- expected net each receiver must end up with
+  where
+    signatory operator
+    observer  regulator
+
+    choice ExecuteSettlement : [ContractId Deposit]
+      controller operator
+      do
+        -- 1. Disburse every leg. Each nested Disburse surfaces its allocation's {bank, owner}
+        --    authority locally, so the operator can move every payer's cash in this one tx.
+        disbursed <- forA transfers \(allocCid, recipient, payAmount) -> do
+          (paid, _change) <- exercise allocCid Disburse with recipient, payAmount
+          pure (recipient, payAmount, paid)
+
+        -- 2. Every listed receiver must end up with exactly its expected net.
+        forA_ payouts \(receiver, expected) -> do
+          let got = sum [ amt | (r, amt, _) <- disbursed, r == receiver ]
+          assertMsg
+            ("ExecuteSettlement: " <> show receiver <> " expected " <> show expected <> " but got " <> show got)
+            (got == expected)
+
+        -- 3. System conservation: total moved in == total owed out (the Sigma-net invariant
+        --    at the cash layer). Together with (2) this rejects any over/under or mis-routing.
+        let totalIn  = sum [ amt | (_, amt, _) <- disbursed ]
+        let totalOut = sum [ e   | (_, e) <- payouts ]
+        assertMsg "ExecuteSettlement: settlement not conserved (total in /= total out)" (totalIn == totalOut)
+
+        pure [ dep | (_, _, dep) <- disbursed ]

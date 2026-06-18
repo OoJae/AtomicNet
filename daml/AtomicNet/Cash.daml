@@ -1,0 +1,74 @@
+-- Tokenized cash for AtomicNet (MVP, hand-rolled; swappable for the Canton token standard
+-- later). A Deposit is bank-issued cash held by an owner. To settle atomically, a net payer
+-- earmarks funds into a bank+owner co-signed DepositAllocation; at settlement the operator
+-- moves the reserved funds with Disburse -- the allocation's signatures surface exactly the
+-- authority needed to mint the receiver's bank-signed Deposit, with no re-authorization.
+module AtomicNet.Cash where
+
+import AtomicNet.Types
+
+template Deposit
+  with
+    bank     : Party
+    owner    : Party
+    currency : CurrencyCode
+    amount   : Decimal
+  where
+    signatory bank
+    observer  owner
+    ensure amount >= 0.0
+
+    -- Owner earmarks `allocAmount` for a cycle's settlement. Consuming: archives this Deposit
+    -- and creates (a) the bank+owner co-signed allocation and (b) the remaining Deposit.
+    -- Authority inside = {owner} (controller) u {bank} (signatory of this Deposit) = {bank, owner}.
+    choice Allocate : (ContractId DepositAllocation, ContractId Deposit)
+      with
+        operator    : Party
+        allocAmount : Decimal
+        cycleId     : Text
+      controller owner
+      do
+        assertMsg "Allocate: amount must be positive" (allocAmount > 0.0)
+        assertMsg "Allocate: insufficient funds" (allocAmount <= amount)
+        alloc <- create DepositAllocation with bank, owner, operator, currency, amount = allocAmount, cycleId
+        remaining <- create this with amount = amount - allocAmount
+        pure (alloc, remaining)
+
+-- A co-signed earmark reserving funds for a specific cycle's settlement. The bank+owner
+-- co-signature (captured at Allocate time) is what lets the operator settle atomically
+-- without re-authorizing the bank at settle time.
+template DepositAllocation
+  with
+    bank     : Party
+    owner    : Party
+    operator : Party
+    currency : CurrencyCode
+    amount   : Decimal
+    cycleId  : Text
+  where
+    signatory bank, owner
+    observer  operator
+
+    -- Operator moves `payAmount` of the reserved funds to `recipient`, returning any change
+    -- to the owner. Authority inside = {operator} u {bank, owner}, enough to mint a
+    -- bank-signed Deposit for the recipient. Consuming.
+    choice Disburse : (ContractId Deposit, Optional (ContractId Deposit))
+      with
+        recipient : Party
+        payAmount : Decimal
+      controller operator
+      do
+        assertMsg "Disburse: amount must be positive" (payAmount > 0.0)
+        assertMsg "Disburse: exceeds reserved amount" (payAmount <= amount)
+        paid <- create Deposit with bank, owner = recipient, currency, amount = payAmount
+        change <- if payAmount < amount
+          then do
+            c <- create Deposit with bank, owner, currency, amount = amount - payAmount
+            pure (Some c)
+          else pure None
+        pure (paid, change)
+
+    -- Owner reclaims the reserved funds (e.g. if the cycle is cancelled). Consuming.
+    choice Reclaim : ContractId Deposit
+      controller owner
+      do create Deposit with bank, owner, currency, amount

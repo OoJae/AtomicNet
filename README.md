@@ -8,8 +8,8 @@ AtomicNet lets the subsidiaries of a multinational settle their intercompany inv
 
 ## Status
 - ✅ **Stage 0** — toolchain + atomic-settlement/privacy gate proven. See [docs/STAGE0.md](docs/STAGE0.md).
-- ⬜ Stage 1 — Daml core (Invoice / Cycle / NetPosition) + happy-path test
-- ⬜ Stage 2 — Cash + atomic single-currency settlement
+- ✅ **Stage 1** — Daml core (Invoice propose/accept, Cycle, NetPosition → ApprovedNetPosition) + happy-path lifecycle test.
+- ✅ **Stage 2** — tokenized cash (Deposit / DepositAllocation) + atomic single-currency settlement; `settlement` + `atomicity` tests green.
 - ⬜ Stage 3 — multi-currency + FX + full test suite (privacy, atomicity, conservation, authorization, regulator)
 - ⬜ Stage 4 — Node/TS backend + React frontend + AI treasury agent
 - ⬜ Stage 5 — demo dataset, polish, hosted demo, CI

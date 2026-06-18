@@ -1,0 +1,68 @@
+-- Stage-2 atomicity proof. Run with `dpm test`.
+-- One payer under-funds its leg. Each individual Disburse would succeed, but the batch's
+-- conservation/payout invariant fails -> the WHOLE settlement transaction reverts and NO
+-- balances change. This is "no partial settlement, no exposure".
+module AtomicNet.Test.Atomicity where
+
+import AtomicNet.Cash
+import AtomicNet.Settlement
+
+import Daml.Script
+import DA.Assert ((===))
+import DA.Optional (isSome)
+
+atomicity : Script ()
+atomicity = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  let issue owner = submit bank do
+        createCmd Deposit with bank, owner, currency = "USD", amount = 1000.0
+  depUS  <- issue subUS
+  _depUK <- issue subUK
+  depDE  <- issue subDE
+
+  -- US allocates its correct 400; DE UNDER-allocates 100 (its net obligation is 200).
+  (allocUS, _) <- submit subUS do
+    exerciseCmd depUS Allocate with operator, allocAmount = 400.0, cycleId = "C"
+  (allocDE, _) <- submit subDE do
+    exerciseCmd depDE Allocate with operator, allocAmount = 100.0, cycleId = "C"
+
+  -- Batch routes 400 + 100 = 500 to UK, but UK is owed 600. Each Disburse is individually
+  -- valid (100 <= 100), so the failure is purely the settlement invariant.
+  batch <- submit operator do
+    createCmd SettlementBatch with
+      operator
+      regulator
+      cycleId = "C"
+      transfers = [(allocUS, subUK, 400.0), (allocDE, subUK, 100.0)]
+      payouts = [(subUK, 600.0)]
+
+  -- The entire settlement must fail.
+  submitMustFail operator do exerciseCmd batch ExecuteSettlement
+
+  -- Prove NOTHING moved:
+  -- (a) UK never received anything -> still exactly its opening 1000.
+  ukDs <- query @Deposit subUK
+  (sum [ d.amount | (_, d) <- ukDs ]) === 1000.0
+
+  -- (b) both allocations are still active (not consumed by the failed Disburse).
+  aUS <- queryContractId operator allocUS
+  assertMsg "US allocation must still be active" (isSome aUS)
+  aDE <- queryContractId operator allocDE
+  assertMsg "DE allocation must still be active" (isSome aDE)
+
+  -- (c) total cash unchanged: 2500 in Deposits (US 600, DE 900, UK 1000) + 500 reserved in
+  --     allocations (US 400, DE 100) = 3000. Nothing minted, nothing destroyed.
+  allDeposits <- query @Deposit bank
+  allAllocs   <- query @DepositAllocation bank
+  let cashInDeposits    = sum [ d.amount | (_, d) <- allDeposits ]
+  let cashInAllocations = sum [ a.amount | (_, a) <- allAllocs ]
+  cashInDeposits === 2500.0
+  (cashInDeposits + cashInAllocations) === 3000.0
+
+  pure ()
