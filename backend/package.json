@@ -3,11 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "AtomicNet backend — netting service (Stage 3) and ledger bridge (Stage 4)",
+  "description": "AtomicNet backend — netting service + JSON Ledger API bridge + AI treasury agent",
   "scripts": {
+    "dev": "node --watch --env-file=../.env src/api/server.ts",
+    "start": "node --env-file=../.env src/api/server.ts",
+    "smoke": "node src/ledger/smoke.ts",
     "test": "node --test \"src/**/*.test.ts\"",
-    "test:watch": "node --test --watch \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
