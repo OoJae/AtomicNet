@@ -1,0 +1,77 @@
+-- REGULATOR selective disclosure: the regulator is an explicit observer on the cycle, net
+-- positions, approvals, and settlement, so it reconstructs the full audit trail -- WITHOUT
+-- subsidiaries having to expose anything to each other. Siblings stay blind.
+module AtomicNet.Test.Regulator where
+
+import AtomicNet.Types
+import AtomicNet.Cycle
+import AtomicNet.NetPosition
+import AtomicNet.Cash
+import AtomicNet.Settlement
+
+import Daml.Script
+import DA.Optional (isNone, isSome)
+
+regulatorDisclosure : Script ()
+regulatorDisclosure = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  cycle <- submit operator do
+    createCmd NettingCycle with
+      operator
+      regulator
+      participants = [subUS, subUK, subDE]
+      settlementCurrency = "USD"
+      fxRates = []
+      cycleId = "C"
+      status = Open
+
+  npDE <- submit operator do
+    createCmd NetPosition with
+      operator
+      subsidiary = subDE
+      regulator
+      cycleId = "C"
+      settlementCurrency = "USD"
+      netAmount = -50.0
+
+  -- Check NetPosition visibility WHILE it is active (ApproveNetPosition below consumes it):
+  -- the regulator sees it; a sibling (Sub_UK) does not.
+  rNp <- queryContractId regulator npDE
+  assertMsg "Regulator sees the net position" (isSome rNp)
+  ukSeesNp <- queryContractId subUK npDE
+  assertMsg "Sub_UK must NOT see Sub_DE's NetPosition" (isNone ukSeesNp)
+
+  -- Approve (consumes npDE -> ApprovedNetPosition); the regulator sees the approval too.
+  apDE <- submit subDE do exerciseCmd npDE ApproveNetPosition
+  rAp <- queryContractId regulator apDE
+  assertMsg "Regulator sees the approved net position" (isSome rAp)
+
+  depDE <- submit bank do
+    createCmd Deposit with bank, owner = subDE, currency = "USD", amount = 100.0
+  (allocDE, _) <- submit subDE do
+    exerciseCmd depDE Allocate with operator, allocAmount = 50.0, cycleId = "C"
+  batch <- submit operator do
+    createCmd SettlementBatch with
+      operator
+      regulator
+      cycleId = "C"
+      transfers = [(allocDE, subUK, 50.0)]
+      payouts = [(subUK, 50.0)]
+
+  -- The regulator also sees the cycle and the settlement batch (full audit trail)...
+  rCycle <- queryContractId regulator cycle
+  assertMsg "Regulator sees the cycle" (isSome rCycle)
+  rBatch <- queryContractId regulator batch
+  assertMsg "Regulator sees the settlement batch" (isSome rBatch)
+
+  -- ...yet a sibling cannot see the whole cycle (participants are data, not observers).
+  ukSeesCycle <- queryContractId subUK cycle
+  assertMsg "Sub_UK must NOT see the whole cycle" (isNone ukSeesCycle)
+
+  pure ()

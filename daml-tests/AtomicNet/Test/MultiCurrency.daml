@@ -1,0 +1,126 @@
+-- Stage-3 gate: multi-currency netting -> atomic single-currency (USD) settlement.
+-- Invoices are raised in USD/EUR/GBP, FX-converted ONCE each to USD, netted (Sigma == 0),
+-- approved, then settled atomically in USD reusing the Stage-2 SettlementBatch. Proves the
+-- whole pipeline end to end across three currencies.
+module AtomicNet.Test.MultiCurrency where
+
+import AtomicNet.Types
+import AtomicNet.Fx
+import AtomicNet.Invoice
+import AtomicNet.Cycle
+import AtomicNet.NetPosition
+import AtomicNet.Cash
+import AtomicNet.Settlement
+
+import Daml.Script
+import DA.Date (Month(Jun), date)
+import DA.Assert ((===))
+
+multiCurrencySettlement : Script ()
+multiCurrencySettlement = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  let cycleId = "CYCLE-FX-2026-06"
+  let rates = [FxRate "EUR" "USD" 1.10, FxRate "GBP" "USD" 1.25]
+
+  -- Invoices across three currencies (issuer is owed; payer owes).
+  let raiseInvoice issuer payer amount currency invoiceId day = do
+        prop <- submit issuer do
+          createCmd InvoiceProposal with
+            operator
+            issuer
+            payer
+            amount
+            currency
+            invoiceId
+            dueDate = date 2026 Jun day
+        submit payer do exerciseCmd prop AcceptInvoice
+
+  invUkUs <- raiseInvoice subUK subUS 1000.0 "USD" "INV-UK-US" 20   -- US owes UK 1000 USD
+  invUsDe <- raiseInvoice subUS subDE  500.0 "EUR" "INV-US-DE" 22   -- DE owes US  500 EUR (=550 USD)
+  invDeUk <- raiseInvoice subDE subUK  400.0 "GBP" "INV-DE-UK" 24   -- UK owes DE  400 GBP (=500 USD)
+
+  -- Open the cycle with the fixed FX rates.
+  cycleOpen <- submit operator do
+    createCmd NettingCycle with
+      operator
+      regulator
+      participants = [subUS, subUK, subDE]
+      settlementCurrency = "USD"
+      fxRates = rates
+      cycleId
+      status = Open
+
+  -- Lock the invoices into the cycle, then lock the cycle.
+  _ <- submit operator do exerciseCmd invUkUs IncludeInCycle with cycleId
+  _ <- submit operator do exerciseCmd invUsDe IncludeInCycle with cycleId
+  _ <- submit operator do exerciseCmd invDeUk IncludeInCycle with cycleId
+  _ <- submit operator do exerciseCmd cycleOpen LockCycle
+
+  -- Net positions in USD, each invoice converted exactly once via FX.
+  let usdUkUs = convert rates "USD" "USD" 1000.0   -- 1000
+  let usdUsDe = convert rates "EUR" "USD"  500.0   --  550
+  let usdDeUk = convert rates "GBP" "USD"  400.0   --  500
+  let netUS = usdUsDe - usdUkUs                     -- +550 -1000 = -450
+  let netUK = usdUkUs - usdDeUk                     -- +1000 -500 = +500
+  let netDE = usdDeUk - usdUsDe                     -- +500  -550 =  -50
+  netUS === (-450.0)
+  netUK === 500.0
+  netDE === (-50.0)
+  (netUS + netUK + netDE) === 0.0                   -- conservation (exact)
+
+  -- Create + approve the net positions.
+  let mkNet subsidiary netAmount = submit operator do
+        createCmd NetPosition with
+          operator
+          subsidiary
+          regulator
+          cycleId
+          settlementCurrency = "USD"
+          netAmount
+  npUS <- mkNet subUS netUS
+  npUK <- mkNet subUK netUK
+  npDE <- mkNet subDE netDE
+  _ <- submit subUS do exerciseCmd npUS ApproveNetPosition
+  _ <- submit subUK do exerciseCmd npUK ApproveNetPosition
+  _ <- submit subDE do exerciseCmd npDE ApproveNetPosition
+
+  -- Cash leg is USD. Bank issues opening deposits; net payers allocate their |net|.
+  let issue owner amount = submit bank do
+        createCmd Deposit with bank, owner, currency = "USD", amount
+  depUS  <- issue subUS 1000.0
+  _depUK <- issue subUK 1000.0
+  depDE  <- issue subDE 1000.0
+
+  (allocUS, _) <- submit subUS do
+    exerciseCmd depUS Allocate with operator, allocAmount = 450.0, cycleId
+  (allocDE, _) <- submit subDE do
+    exerciseCmd depDE Allocate with operator, allocAmount = 50.0, cycleId
+
+  -- Settle atomically in USD: US pays UK 450, DE pays UK 50; UK nets +500.
+  batch <- submit operator do
+    createCmd SettlementBatch with
+      operator
+      regulator
+      cycleId
+      transfers = [(allocUS, subUK, 450.0), (allocDE, subUK, 50.0)]
+      payouts = [(subUK, 500.0)]
+  _ <- submit operator do exerciseCmd batch ExecuteSettlement
+
+  -- Final USD balances = opening +/- net.
+  let balanceOf p = do
+        ds <- query @Deposit p
+        pure (sum [ d.amount | (_, d) <- ds, d.currency == "USD", d.owner == p ])
+  usBal <- balanceOf subUS
+  usBal === 550.0      -- 1000 - 450
+  ukBal <- balanceOf subUK
+  ukBal === 1500.0     -- 1000 + 500
+  deBal <- balanceOf subDE
+  deBal === 950.0      -- 1000 - 50
+
+  pure ()

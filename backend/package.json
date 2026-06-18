@@ -1,0 +1,16 @@
+{
+  "name": "atomicnet-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AtomicNet backend — netting service (Stage 3) and ledger bridge (Stage 4)",
+  "scripts": {
+    "test": "node --test \"src/**/*.test.ts\"",
+    "test:watch": "node --test --watch \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

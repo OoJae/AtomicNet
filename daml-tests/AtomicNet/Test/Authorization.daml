@@ -1,0 +1,64 @@
+-- AUTHORIZATION proof: authority is enforced by the protocol. No party can forge another's
+-- signature, and no subsidiary can unilaterally move money or trigger settlement.
+module AtomicNet.Test.Authorization where
+
+import AtomicNet.Invoice
+import AtomicNet.NetPosition
+import AtomicNet.Cash
+import AtomicNet.Settlement
+
+import Daml.Script
+import DA.Date (Month(Jun), date)
+
+authorization : Script ()
+authorization = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  -- (1) No forging: Sub_US cannot conjure an IntercompanyInvoice that binds Sub_DE -- the
+  --     obligation requires DE's authority (a signatory), so it can only arise via DE's
+  --     AcceptInvoice. A direct create is rejected.
+  submitMustFail subUS do
+    createCmd IntercompanyInvoice with
+      operator
+      issuer = subUS
+      payer = subDE
+      amount = 1000.0
+      currency = "USD"
+      invoiceId = "FORGED"
+      dueDate = date 2026 Jun 20
+      included = False
+
+  -- (2) A subsidiary cannot approve ANOTHER sub's net position (ApproveNetPosition is
+  --     controlled by that subsidiary; Sub_US is neither controller nor an observer of it).
+  npDE <- submit operator do
+    createCmd NetPosition with
+      operator
+      subsidiary = subDE
+      regulator
+      cycleId = "C"
+      settlementCurrency = "USD"
+      netAmount = -50.0
+  submitMustFail subUS do exerciseCmd npDE ApproveNetPosition
+
+  -- (3) A subsidiary cannot trigger settlement (ExecuteSettlement is operator-controlled,
+  --     and the sub cannot even see the batch), nor disburse a reserved allocation.
+  depDE <- submit bank do
+    createCmd Deposit with bank, owner = subDE, currency = "USD", amount = 1000.0
+  (allocDE, _) <- submit subDE do
+    exerciseCmd depDE Allocate with operator, allocAmount = 50.0, cycleId = "C"
+  batch <- submit operator do
+    createCmd SettlementBatch with
+      operator
+      regulator
+      cycleId = "C"
+      transfers = [(allocDE, subUK, 50.0)]
+      payouts = [(subUK, 50.0)]
+  submitMustFail subUS do exerciseCmd batch ExecuteSettlement
+  submitMustFail subUK do exerciseCmd allocDE Disburse with recipient = subUK, payAmount = 50.0
+
+  pure ()

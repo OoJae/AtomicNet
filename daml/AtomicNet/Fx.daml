@@ -1,0 +1,20 @@
+-- Fixed FX conversion for a netting cycle. A cycle carries a list of FxRate; invoices in
+-- any currency are converted to the cycle's settlement currency for netting.
+module AtomicNet.Fx where
+
+import AtomicNet.Types
+import DA.List (find)
+
+-- Convert `amount` of `from` into `to` using the cycle's fixed rates. Same-currency is
+-- identity; otherwise look up the (from -> to) rate and multiply.
+--
+-- We deliberately do NOT round: Decimal is Numeric 10, and converting each invoice exactly
+-- ONCE (then applying +amount to the issuer and -amount to the payer) keeps Sigma net == 0
+-- exactly. Production would round to the settlement currency's minor units and carry a small
+-- tolerance band on the conservation check; that is noted as future work.
+convert : [FxRate] -> CurrencyCode -> CurrencyCode -> Decimal -> Decimal
+convert rates from to amount
+  | from == to = amount
+  | otherwise = case find (\r -> r.base == from && r.quote == to) rates of
+      Some r -> amount * r.rate
+      None -> error ("convert: no FX rate for " <> from <> " -> " <> to)

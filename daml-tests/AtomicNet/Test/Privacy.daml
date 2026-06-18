@@ -1,0 +1,68 @@
+-- PRIVACY proof: a subsidiary learns about a contract only if it is a signatory, observer,
+-- or choice controller. Siblings are on none of those sets, so the ledger never reveals
+-- another pair's invoice or another sub's net position. This is privacy by protocol, not by
+-- application -- we query AS the party and let Canton filter.
+module AtomicNet.Test.Privacy where
+
+import AtomicNet.Invoice
+import AtomicNet.NetPosition
+
+import Daml.Script
+import DA.Date (Month(Jun), date)
+import DA.Optional (isNone, isSome)
+import DA.Assert ((===))
+
+privacy : Script ()
+privacy = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  let raiseInvoice issuer payer invoiceId = do
+        prop <- submit issuer do
+          createCmd InvoiceProposal with
+            operator
+            issuer
+            payer
+            amount = 1000.0
+            currency = "USD"
+            invoiceId
+            dueDate = date 2026 Jun 20
+        submit payer do exerciseCmd prop AcceptInvoice
+
+  invUkUs <- raiseInvoice subUK subUS "INV-UK-US"   -- visible to UK, US, operator
+  invUsDe <- raiseInvoice subUS subDE "INV-US-DE"   -- visible to US, DE, operator
+
+  -- (1) A sibling cannot see an invoice it is not a party to.
+  ukSeesUsDe <- queryContractId subUK invUsDe
+  assertMsg "Sub_UK must NOT see the US<->DE invoice" (isNone ukSeesUsDe)
+  deSeesUkUs <- queryContractId subDE invUkUs
+  assertMsg "Sub_DE must NOT see the UK<->US invoice" (isNone deSeesUkUs)
+
+  -- ...but the genuine counterparties do.
+  usSeesUkUs <- queryContractId subUS invUkUs
+  assertMsg "Sub_US (payer) sees its own invoice" (isSome usSeesUkUs)
+
+  -- (2) Querying AS a party returns only that party's invoices -- the ledger filters, not us.
+  --     Sub_UK is a party to exactly one invoice (UK<->US), never the US<->DE one.
+  ukInvoices <- query @IntercompanyInvoice subUK
+  length ukInvoices === 1
+
+  -- (3) NetPosition privacy: Sub_DE's position is visible to DE + operator + regulator,
+  --     but hidden from a sibling (Sub_UK).
+  npDE <- submit operator do
+    createCmd NetPosition with
+      operator
+      subsidiary = subDE
+      regulator
+      cycleId = "C"
+      settlementCurrency = "USD"
+      netAmount = -50.0
+  ukSeesNpDe <- queryContractId subUK npDE
+  assertMsg "Sub_UK must NOT see Sub_DE's NetPosition" (isNone ukSeesNpDe)
+  deSeesNpDe <- queryContractId subDE npDE
+  assertMsg "Sub_DE sees its OWN NetPosition" (isSome deSeesNpDe)
+
+  pure ()
