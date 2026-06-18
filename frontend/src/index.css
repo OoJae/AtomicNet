@@ -1,0 +1,117 @@
+/* AtomicNet — institutional treasury theme. Restrained slate/ink + one deep-blue accent. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #fbfcfd;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --muted: #64748b;
+  --line: #e6e9ee;
+  --line-2: #d8dde5;
+  --accent: #1d4ed8;
+  --accent-ink: #1e3a8a;
+  --accent-soft: #eef2ff;
+  --pos: #047857;
+  --pos-soft: #ecfdf5;
+  --neg: #b91c1c;
+  --neg-soft: #fef2f2;
+  --amber: #b45309;
+  --amber-soft: #fffbeb;
+  --usd: #2563eb;
+  --eur: #7c3aed;
+  --gbp: #0d9488;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5; }
+h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+a { color: var(--accent); text-decoration: none; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* layout */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; align-items: center; gap: 24px;
+  padding: 0 24px; height: 60px; background: var(--surface);
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: -0.02em; }
+.brand .dot { color: var(--accent); }
+.brand small { font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0.02em; }
+.tabs { display: flex; gap: 2px; margin-left: auto; }
+.tab { padding: 7px 14px; border-radius: 8px; color: var(--ink-2); cursor: pointer; font-weight: 550; border: 1px solid transparent; }
+.tab:hover { background: var(--surface-2); }
+.tab.active { background: var(--accent-soft); color: var(--accent-ink); }
+.main { padding: 24px; max-width: 1180px; width: 100%; margin: 0 auto; }
+
+/* party switcher */
+.switcher { display: flex; align-items: center; gap: 10px; }
+.switcher .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg button {
+  border: 0; background: transparent; padding: 6px 12px; border-radius: 7px;
+  font: inherit; font-weight: 550; color: var(--ink-2); cursor: pointer;
+}
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.seg button .role { display: block; font-size: 10px; color: var(--muted); font-weight: 500; }
+
+/* cards */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.card-h { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.card-h h3 { font-size: 14px; }
+.card-b { padding: 18px; }
+.grid { display: grid; gap: 18px; }
+.grid.c2 { grid-template-columns: 1fr 1fr; }
+.grid.c3 { grid-template-columns: repeat(3, 1fr); }
+.row { display: flex; gap: 18px; align-items: stretch; }
+.spread { display: flex; align-items: center; justify-content: space-between; }
+.stack { display: flex; flex-direction: column; gap: 18px; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+td.r, th.r { text-align: right; }
+
+/* chips */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface-2); }
+.chip.open { background: var(--surface-2); color: var(--muted); }
+.chip.locked { background: var(--amber-soft); color: var(--amber); border-color: #fcd9a8; }
+.chip.settled { background: var(--pos-soft); color: var(--pos); border-color: #a7f3d0; }
+.chip.approved { background: var(--accent-soft); color: var(--accent-ink); border-color: #c7d2fe; }
+.chip.ccy-USD { color: var(--usd); border-color: #bfdbfe; background: #eff6ff; }
+.chip.ccy-EUR { color: var(--eur); border-color: #ddd6fe; background: #f5f3ff; }
+.chip.ccy-GBP { color: var(--gbp); border-color: #99f6e4; background: #f0fdfa; }
+
+/* numbers */
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+.metric { display: flex; flex-direction: column; gap: 2px; }
+.metric .v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.metric .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.big-ratio { font-size: 40px; font-weight: 750; letter-spacing: -0.03em; }
+.big-ratio .arrow { color: var(--accent); margin: 0 10px; }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-ink); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+
+/* misc */
+.note { font-size: 12px; color: var(--muted); }
+.banner { padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; border: 1px solid #c7d2fe; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+.kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+.legend { display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--muted); }
+.legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }
