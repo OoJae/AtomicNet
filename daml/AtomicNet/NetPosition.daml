@@ -1,0 +1,36 @@
+-- Per-subsidiary net position for a cycle. The operator drafts it (sole signatory);
+-- the subsidiary approves it, producing a co-signed ApprovedNetPosition. That
+-- co-signature is the delegation that lets the operator settle on the subsidiary's
+-- behalf atomically in Stage 2 — "the operator proposes, the subsidiary consents".
+module AtomicNet.NetPosition where
+
+import AtomicNet.Types
+
+template NetPosition
+  with
+    operator           : Party
+    subsidiary         : Party
+    regulator          : Party
+    cycleId            : Text
+    settlementCurrency : CurrencyCode
+    netAmount          : Decimal        -- > 0 receives, < 0 pays (set manually in Stage 1)
+  where
+    signatory operator                  -- operator computes and proposes the position alone
+    observer  subsidiary, regulator     -- the sub must SEE it to approve; regulator audits
+
+    choice ApproveNetPosition : ContractId ApprovedNetPosition
+      controller subsidiary
+      do create ApprovedNetPosition with
+           operator; subsidiary; regulator; cycleId; settlementCurrency; netAmount
+
+template ApprovedNetPosition
+  with
+    operator           : Party
+    subsidiary         : Party
+    regulator          : Party
+    cycleId            : Text
+    settlementCurrency : CurrencyCode
+    netAmount          : Decimal
+  where
+    signatory operator, subsidiary      -- BOTH signed -> settlement authority delegated to operator
+    observer  regulator

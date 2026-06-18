@@ -1,0 +1,34 @@
+-- The netting cycle: a time-boxed round of netting. Signed by the operator, observed
+-- (for audit) by the regulator. Participants are recorded as DATA only — deliberately
+-- NOT observers — so subsidiaries cannot enumerate each other from the cycle. A sub
+-- learns only its own NetPosition.
+module AtomicNet.Cycle where
+
+import AtomicNet.Types
+
+template NettingCycle
+  with
+    operator           : Party
+    regulator          : Party
+    participants       : [Party]        -- subsidiaries in this round (DATA, not disclosure)
+    settlementCurrency : CurrencyCode
+    fxRates            : [FxRate]
+    cycleId            : Text
+    status             : CycleStatus
+  where
+    signatory operator
+    observer  regulator                 -- selective disclosure to the regulator
+    -- NB: `participants` is NOT an observer list. Making it one would leak the whole
+    -- cycle to every subsidiary and break AtomicNet's headline privacy property.
+
+    choice LockCycle : ContractId NettingCycle
+      controller operator
+      do create this with status = Locked
+
+    choice MarkSettled : ContractId NettingCycle
+      controller operator
+      do create this with status = Settled
+
+    choice CancelCycle : ContractId NettingCycle
+      controller operator
+      do create this with status = Cancelled

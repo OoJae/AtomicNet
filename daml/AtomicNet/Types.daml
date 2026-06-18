@@ -1,0 +1,21 @@
+-- Shared types for the AtomicNet netting model.
+module AtomicNet.Types where
+
+-- Currency label. Text keeps Stage 1 simple; FX conversion is applied in Stage 2/3.
+type CurrencyCode = Text   -- "USD", "EUR", "GBP", "SGD"
+
+-- A fixed FX rate stored on a cycle: 1 unit of `base` = `rate` units of `quote`.
+data FxRate = FxRate
+  with
+    base  : CurrencyCode
+    quote : CurrencyCode
+    rate  : Decimal
+  deriving (Eq, Show)
+
+-- Lifecycle of a netting cycle.
+data CycleStatus
+  = Open       -- accepting / fixing invoices
+  | Locked     -- invoices fixed; net positions computed and approved
+  | Settled    -- atomic settlement executed
+  | Cancelled  -- abandoned
+  deriving (Eq, Show)

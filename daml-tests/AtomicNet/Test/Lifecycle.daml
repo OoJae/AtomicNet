@@ -1,0 +1,97 @@
+-- Stage-1 happy-path lifecycle. Run with `dpm test` (inside daml-tests/).
+-- Proves the invoice -> cycle -> net-position -> approval flow end to end, plus two
+-- inline privacy spot-checks (siblings stay blind). The full privacy / atomicity /
+-- authorization / regulator matrix is Stage 3.
+module AtomicNet.Test.Lifecycle where
+
+import AtomicNet.Types
+import AtomicNet.Invoice
+import AtomicNet.Cycle
+import AtomicNet.NetPosition
+
+import Daml.Script
+import DA.Date (Month(Jun), date)
+import DA.Optional (isNone)
+import DA.Assert ((===))
+
+lifecycle : Script ()
+lifecycle = script do
+  -- 1. Parties
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  _bank     <- allocatePartyByHint (PartyIdHint "Bank")        -- allocated for parity; used in Stage 2
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  -- 2. Invoices via propose/accept. A small 3-cycle, all in USD:
+  --    UK issues to US (US pays 1000); US issues to DE (DE pays 600); DE issues to UK (UK pays 400).
+  let raiseInvoice issuer payer amount invoiceId day = do
+        prop <- submit issuer do
+          createCmd InvoiceProposal with
+            operator; issuer; payer; amount; currency = "USD"
+            invoiceId; dueDate = date 2026 Jun day
+        submit payer do exerciseCmd prop AcceptInvoice
+
+  invUkUs <- raiseInvoice subUK subUS 1000.0 "INV-UK-US-1" 20
+  invUsDe <- raiseInvoice subUS subDE  600.0 "INV-US-DE-1" 22
+  invDeUk <- raiseInvoice subDE subUK  400.0 "INV-DE-UK-1" 24
+
+  -- 3. PRIVACY spot-check #1: Sub_DE is not a stakeholder of the UK->US invoice.
+  deSeesUkUs <- queryContractId subDE invUkUs
+  assertMsg "Sub_DE must NOT see the UK->US invoice" (isNone deSeesUkUs)
+
+  -- 4. Operator opens a cycle (participants are DATA, not observers).
+  cycleOpen <- submit operator do
+    createCmd NettingCycle with
+      operator; regulator
+      participants = [subUS, subUK, subDE]
+      settlementCurrency = "USD"
+      fxRates = []
+      cycleId = "CYCLE-2026-06"
+      status = Open
+
+  -- 5. Operator locks the three invoices into the cycle.
+  _invUkUs' <- submit operator do exerciseCmd invUkUs IncludeInCycle with cycleId = "CYCLE-2026-06"
+  _invUsDe' <- submit operator do exerciseCmd invUsDe IncludeInCycle with cycleId = "CYCLE-2026-06"
+  _invDeUk' <- submit operator do exerciseCmd invDeUk IncludeInCycle with cycleId = "CYCLE-2026-06"
+
+  -- 6. Lock the cycle.
+  cycleLocked <- submit operator do exerciseCmd cycleOpen LockCycle
+
+  -- 7. Operator computes net positions (manual in Stage 1; they sum to zero):
+  --    US: -1000 (pays UK) + 600 (recv DE) = -400
+  --    UK: +1000 (recv US) - 400 (pays DE) = +600
+  --    DE:  +400 (recv UK) - 600 (pays US) = -200
+  let mkNet subsidiary netAmount = submit operator do
+        createCmd NetPosition with
+          operator; subsidiary; regulator; cycleId = "CYCLE-2026-06"
+          settlementCurrency = "USD"; netAmount
+  npUS <- mkNet subUS (-400.0)
+  npUK <- mkNet subUK   600.0
+  npDE <- mkNet subDE (-200.0)
+
+  -- 8. Each subsidiary approves its own position -> co-signed ApprovedNetPosition.
+  apUS <- submit subUS do exerciseCmd npUS ApproveNetPosition
+  apUK <- submit subUK do exerciseCmd npUK ApproveNetPosition
+  apDE <- submit subDE do exerciseCmd npDE ApproveNetPosition
+
+  -- 9. Assertions.
+  Some aUS <- queryContractId subUS apUS         -- Sub_US reads its own approved position
+  aUS.netAmount === -400.0
+  Some aUK <- queryContractId operator apUK       -- operator co-signed it
+  aUK.netAmount === 600.0
+  Some aDE <- queryContractId regulator apDE      -- regulator can read it (selective disclosure)
+  aDE.netAmount === -200.0
+
+  Some lc <- queryContractId operator cycleLocked
+  lc.status === Locked
+
+  -- conservation: the net positions sum to zero
+  (aUS.netAmount + aUK.netAmount + aDE.netAmount) === 0.0
+
+  -- 10. PRIVACY spot-check #2: Sub_UK cannot see Sub_DE's NetPosition.
+  ukSeesDePos <- queryContractId subUK npDE
+  assertMsg "Sub_UK must NOT see Sub_DE's NetPosition" (isNone ukSeesDePos)
+
+  pure ()

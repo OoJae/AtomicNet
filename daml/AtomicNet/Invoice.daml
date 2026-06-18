@@ -1,0 +1,61 @@
+-- Intercompany invoices. The privacy boundary of AtomicNet lives here: only the two
+-- counterparties and the operator are ever parties to an invoice, so sibling
+-- subsidiaries can never see it — privacy by protocol, not by application.
+module AtomicNet.Invoice where
+
+import AtomicNet.Types
+
+-- Issuer proposes; the payer accepts. Neither can forge the other's signature: the
+-- issuer signs the proposal alone, and the binding IntercompanyInvoice (signed by BOTH)
+-- can only come into existence when the payer exercises AcceptInvoice.
+template InvoiceProposal
+  with
+    operator  : Party
+    issuer    : Party        -- the entity OWED money (receivable)
+    payer     : Party        -- the entity that OWES money (payable)
+    amount    : Decimal
+    currency  : CurrencyCode
+    invoiceId : Text
+    dueDate   : Date
+  where
+    signatory issuer
+    observer  payer, operator   -- payer must SEE it to accept; operator observes the pipeline
+    ensure amount > 0.0
+
+    choice AcceptInvoice : ContractId IntercompanyInvoice
+      controller payer
+      do create IntercompanyInvoice with
+           operator; issuer; payer; amount; currency; invoiceId; dueDate
+           included = False
+
+    choice RejectInvoice : ()
+      controller payer
+      do pure ()
+
+-- The bilateral obligation, co-signed by both counterparties. Created only via
+-- AcceptInvoice, so both signatures are genuine.
+template IntercompanyInvoice
+  with
+    operator  : Party
+    issuer    : Party
+    payer     : Party
+    amount    : Decimal
+    currency  : CurrencyCode
+    invoiceId : Text
+    dueDate   : Date
+    included  : Bool         -- has this been locked into a netting cycle?
+  where
+    signatory issuer, payer  -- both are bound by, and both see, the obligation
+    observer  operator       -- operator nets over it; siblings are on NEITHER set -> blind
+    ensure amount > 0.0
+
+    -- Operator locks the invoice into a cycle. Consuming recreate: the authority available
+    -- inside the choice is {operator} (controller) u {issuer, payer} (signatories of the
+    -- exercised contract), which covers the recreated invoice's signatories.
+    -- Stage-2 refactor to consider: have the NettingCycle reference included invoice cids
+    -- as the single source of truth, instead of mutating this `included` flag.
+    choice IncludeInCycle : ContractId IntercompanyInvoice
+      with
+        cycleId : Text       -- the cycle this invoice is being locked into
+      controller operator
+      do create this with included = True
