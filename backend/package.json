@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node --watch --env-file=../.env src/api/server.ts",
     "start": "node --env-file=../.env src/api/server.ts",
+    "serve": "tsx src/api/server.ts",
     "smoke": "node src/ledger/smoke.ts",
     "test": "node --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"

@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import * as svc from "./service.ts";
 
 const app = new Hono();
@@ -42,8 +43,24 @@ app.onError((err, c) => {
   return c.json({ error: String((err as Error)?.message ?? err) }, 500);
 });
 
+// In production, serve the built frontend from the same origin (no proxy / CORS needed).
+const dist = process.env.FRONTEND_DIST;
+if (dist) {
+  app.use("/assets/*", serveStatic({ root: dist }));
+  app.use("/*", serveStatic({ root: dist }));
+  app.get("*", serveStatic({ path: `${dist}/index.html` })); // SPA fallback
+}
+
 const port = Number(process.env.PORT ?? 8080);
 console.log("AtomicNet backend: bootstrapping ledger (allocating parties, seeding deposits)...");
 await svc.bootstrap();
-console.log(`AtomicNet backend listening on http://localhost:${port}`);
+if (process.env.SEED_DEMO === "1") {
+  try {
+    const r = await svc.runDemo();
+    console.log("seeded demo cycle:", r.cycleId, r.balances);
+  } catch (e) {
+    console.error("demo seed failed (non-fatal):", (e as Error)?.message ?? e);
+  }
+}
+console.log(`AtomicNet backend listening on :${port}` + (dist ? " (serving frontend + API)" : ""));
 serve({ fetch: app.fetch, port });

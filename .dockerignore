@@ -1,0 +1,13 @@
+# Build everything fresh in-image; keep the build context small.
+.git
+**/node_modules
+**/.daml
+**/dist
+backend/public
+**/*.log
+.env
+stage0-spike
+docs
+*.md
+.github
+.claude
