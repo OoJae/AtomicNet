@@ -6,6 +6,8 @@ AtomicNet lets the subsidiaries of a multinational settle their intercompany inv
 
 > Hackathon project — Build on Canton (Encode Club × Canton Foundation, 2026). MVP scope: 3–5 subsidiaries, 1 operator, 1 bank, 1 regulator; 2–3 currencies; hosted demo environment (not mainnet).
 
+**🌐 Live demo: https://atomicnet-production.up.railway.app** — a real Canton sandbox ledger + the full app in one container (demo environment; resets on redeploy). Try: Operator → *Run full demo cycle* · **Network** tab → toggle *Gross web ↔ Net settlement* · switch *Acting as* → **Sub_UK** → **Privacy Proof** (the US↔DE invoice is hidden by the ledger).
+
 ## Status
 - ✅ **Stage 0** — toolchain + atomic-settlement/privacy gate proven. See [docs/STAGE0.md](docs/STAGE0.md).
 - ✅ **Stage 1** — Daml core (Invoice propose/accept, Cycle, NetPosition → ApprovedNetPosition) + happy-path lifecycle test.
