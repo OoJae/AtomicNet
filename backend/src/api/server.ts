@@ -24,8 +24,14 @@ app.use("/api/*", async (c, next) => {
   return next();
 });
 
+// Which ledger this deployment fronts — lets the landing/proof pages flavor their copy
+// ("live on Canton DevNet" vs "sandbox playground") per origin. Mirrors start.sh's mode glob:
+// unset or an explicit localhost URL means the self-contained sandbox.
+const LEDGER_URL = process.env.JSON_API_URL ?? "";
+const NETWORK = LEDGER_URL === "" || /^http:\/\/(localhost|127\.0\.0\.1)/.test(LEDGER_URL) ? "sandbox" : "devnet";
+
 app.get("/api/health", (c) => c.json({ ok: true, writeLocked: WRITE_LOCKED }));
-app.get("/api/config", (c) => c.json({ writeLocked: WRITE_LOCKED }));
+app.get("/api/config", (c) => c.json({ writeLocked: WRITE_LOCKED, network: NETWORK }));
 app.get("/api/parties", (c) => c.json(svc.getParties()));
 
 // Per-party reads (the ledger filters by stakeholder).
@@ -66,11 +72,16 @@ app.onError((err, c) => {
 });
 
 // In production, serve the built frontend from the same origin (no proxy / CORS needed).
+// Multi-page site: `/` = brand landing (index.html), `/app` = the React console,
+// `/how` + `/proof` = static pages; unknown paths fall back to the landing.
 const dist = process.env.FRONTEND_DIST;
 if (dist) {
   app.use("/assets/*", serveStatic({ root: dist }));
+  app.get("/app", serveStatic({ path: `${dist}/app.html` }));
+  app.get("/how", serveStatic({ path: `${dist}/how.html` }));
+  app.get("/proof", serveStatic({ path: `${dist}/proof.html` }));
   app.use("/*", serveStatic({ root: dist }));
-  app.get("*", serveStatic({ path: `${dist}/index.html` })); // SPA fallback
+  app.get("*", serveStatic({ path: `${dist}/index.html` }));
 }
 
 const port = Number(process.env.PORT ?? 8080);

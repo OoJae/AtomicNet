@@ -1,0 +1,36 @@
+/* AtomicNet brand tokens — "Midnight Ledger".
+   The landing/how/proof pages are the network at night (dark, luminous);
+   the console keeps its light institutional theme (the trading floor by day). */
+:root {
+  /* color */
+  --void: #070b12;              /* page bg — the network at night */
+  --void-2: #0b1220;            /* raised surfaces on void */
+  --paper: #f2efe7;             /* warm ledger-paper white (never sterile #fff) */
+  --wire: #4d7cff;              /* THE accent — luminous settlement blue */
+  --wire-deep: #1d4ed8;         /* console-accent continuity (light theme) */
+  --dim: #8a93a8;               /* secondary ink on void */
+  --hairline: rgba(242, 239, 231, 0.14);
+  --hairline-2: rgba(242, 239, 231, 0.07);
+
+  /* data colors — ONLY inside data visualizations (continuity with the console graph) */
+  --usd: #4d7cff;
+  --eur: #a78bfa;
+  --gbp: #2dd4bf;
+  --pos: #34d399;
+  --neg: #f87171;
+
+  /* type */
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Inter Variable", Inter, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --size-hero: clamp(3rem, 9vw, 8.5rem);        /* lh 0.95, tracking -0.02em */
+  --size-chapter: clamp(2rem, 4.5vw, 4.25rem);  /* lh 1.02 */
+  --size-body: clamp(1rem, 1.05vw, 1.1875rem);  /* lh 1.6 */
+  --size-label: 0.6875rem;                      /* caps, tracking +0.1em */
+
+  /* rhythm */
+  --space: clamp(1.25rem, 2.5vw, 2.5rem);
+  --gutter: clamp(1.25rem, 4vw, 4rem);
+  --radius: 10px;
+}

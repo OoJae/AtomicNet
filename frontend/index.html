@@ -3,10 +3,143 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AtomicNet — Private Atomic Intercompany Netting on Canton</title>
+    <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
+    <title>AtomicNet — Twenty payments. Three wires. Nothing leaked.</title>
+    <meta name="description" content="AtomicNet nets a multinational's intercompany invoices down to the fewest possible payments — privately, atomically, on the Canton Network." />
+    <meta property="og:title" content="AtomicNet — private atomic netting on Canton" />
+    <meta property="og:description" content="Twenty payments. Three wires. Nothing leaked. Settled in one atomic transaction on the Canton Network." />
+    <meta property="og:image" content="/brand/og.png" />
+    <meta property="og:type" content="website" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <a class="skip" href="#outro">Skip to the demo links</a>
+
+    <header class="site-head">
+      <a class="head-brand" href="/" aria-label="AtomicNet home">
+        <img src="/brand/logomark.svg" alt="" width="28" height="28" />
+        <span class="head-word">Atomic<b>Net</b></span>
+      </a>
+      <nav class="head-nav" aria-label="Site">
+        <a href="/how">How it works</a>
+        <a href="/proof">Proof</a>
+        <a class="head-cta" href="/app">Open the console<span aria-hidden="true"> →</span></a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ==================== THE STAGE: one scroll-driven scene ==================== -->
+      <div class="stage" id="stage">
+        <div class="stage-sticky">
+          <div class="wash" aria-hidden="true"></div>
+          <canvas id="web" aria-hidden="true"></canvas>
+          <div class="node-labels" aria-hidden="true"></div>
+
+          <!-- HERO -->
+          <section class="hero chapter" id="ch-hero" aria-label="AtomicNet">
+            <p class="eyebrow mono">Private atomic netting · built on Canton</p>
+            <h1 class="hero-title">
+              <span class="line"><span class="line-inner">Twenty payments.</span></span>
+              <span class="line"><span class="line-inner">Three wires.</span></span>
+              <span class="line"><span class="line-inner"><em>Nothing leaked.</em></span></span>
+            </h1>
+            <p class="hero-sub">
+              AtomicNet nets a multinational's intercompany invoices down to the fewest
+              possible payments — <em>privately</em>, <em>atomically</em>, on the Canton Network.
+            </p>
+            <p class="hero-figures mono">20 obligations · 3 currencies · 5 subsidiaries · Σ net = 0</p>
+            <p class="scroll-cue mono" aria-hidden="true">Scroll to settle<span class="cue-arrow">↓</span></p>
+          </section>
+
+          <!-- 01 THE GROSS WEB -->
+          <aside class="chapter annot annot-left" id="ch-web">
+            <p class="eyebrow mono">01 — The gross web</p>
+            <h2>Every invoice is a wire<br />waiting to happen.</h2>
+            <p>
+              Five subsidiaries. Twenty intercompany invoices. Three currencies. Settled
+              bilaterally, that's twenty cross-border payments of FX spread, fees and float —
+              every single month.
+            </p>
+          </aside>
+
+          <!-- 02 PRIVATE BY PROTOCOL -->
+          <aside class="chapter annot annot-right" id="ch-privacy">
+            <p class="eyebrow mono">02 — Private by protocol</p>
+            <h2>The others' flows aren't hidden.<br /><em>They don't exist.</em></h2>
+            <p>
+              Canton discloses a contract only to its signatories and observers. Acting as the
+              UK subsidiary, the ledger holds its eight invoices — the other twelve aren't
+              filtered out. They were never sent.
+            </p>
+            <p class="mono annot-figure">SUB_UK SEES <b>8 / 20</b> · ENFORCED BY THE LEDGER, NOT THE APP</p>
+          </aside>
+
+          <!-- 03 THE COLLAPSE -->
+          <aside class="chapter annot annot-left" id="ch-collapse">
+            <p class="eyebrow mono">03 — The collapse</p>
+            <h2>Twenty obligations.<br /><em>Three payments.</em></h2>
+            <p>
+              AtomicNet computes every subsidiary's net position and routes the minimum set of
+              transfers. Singapore owed exactly as much as it was owed — so for Singapore,
+              <em>no money moves at all</em>.
+            </p>
+            <p class="mono annot-figure sigma">Σ NET POSITIONS = <b>$0.00</b> · CONSERVED, ON-LEDGER</p>
+          </aside>
+          <div class="numeral" aria-hidden="true">
+            <span class="numeral-gross num">20</span>
+            <span class="numeral-arrow">→</span>
+            <span class="numeral-net num">3</span>
+          </div>
+
+          <!-- 04 ATOMIC -->
+          <aside class="chapter annot annot-right" id="ch-atomic">
+            <p class="eyebrow mono">04 — Atomic</p>
+            <h2>One transaction.<br /><em>All or nothing.</em></h2>
+            <p>
+              Every leg settles inside a single Canton transaction — pre-authorized by each
+              payer's co-signed allocation, checked for conservation on-ledger, reverted
+              entirely if any leg fails. No partial settlement. No exposure.
+            </p>
+          </aside>
+
+          <!-- resolve: constellation → mark -->
+          <div class="resolve" aria-hidden="true">
+            <img src="/brand/logomark.svg" alt="" width="120" height="120" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== OUTRO / CTA ==================== -->
+      <section class="outro" id="outro" aria-label="Open the live demos">
+        <h2 class="outro-title">See it settle <em>for real.</em></h2>
+        <p class="outro-sub" data-network-copy>
+          The console below is live. Raise the invoices, approve as each subsidiary, and
+          execute the settlement yourself.
+        </p>
+        <div class="outro-ctas">
+          <a class="btn-primary" href="/app">Open the live console<span aria-hidden="true"> →</span></a>
+          <a class="btn-ghost" id="sibling-link" href="https://atomicnet-devnet-production.up.railway.app" target="_blank" rel="noopener">
+            See it on Canton DevNet<span aria-hidden="true"> ↗</span>
+          </a>
+        </div>
+        <p class="proof-strip mono">
+          <a href="/proof">8 Daml proofs</a> · CI green · settled on Canton DevNet ·
+          pkg 7712f358… · <a href="/how">how it works</a>
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <img src="/brand/wordmark.svg" alt="AtomicNet" height="26" />
+      <p>Built for the Build on Canton hackathon — Encode Club × Canton Foundation, 2026.</p>
+      <nav aria-label="Footer">
+        <a href="https://github.com/OoJae/AtomicNet" target="_blank" rel="noopener">GitHub</a>
+        <a href="/how">How it works</a>
+        <a href="/proof">Proof</a>
+        <a href="/app">Console</a>
+      </nav>
+    </footer>
+
+    <div class="grain" aria-hidden="true"></div>
+    <script type="module" src="/src/landing/main.ts"></script>
   </body>
 </html>
