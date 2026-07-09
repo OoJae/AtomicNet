@@ -58,6 +58,8 @@ authorization = script do
       cycleId = "C"
       transfers = [(allocDE, subUK, 50.0)]
       payouts = [(subUK, 50.0)]
+      cycle = None        -- irrelevant here: the sub fails on authority before the body runs
+      approvals = None
   submitMustFail subUS do exerciseCmd batch ExecuteSettlement
   submitMustFail subUK do exerciseCmd allocDE Disburse with recipient = subUK, payAmount = 50.0
 

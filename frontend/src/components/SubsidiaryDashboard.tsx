@@ -3,7 +3,7 @@ import { api, fmt, signed, type Dashboard } from "../api";
 import { useAsync } from "../useApi";
 import { ErrorBanner } from "./ErrorBanner";
 
-export function SubsidiaryDashboard({ party, cycleId, refresh, bump }: { party: string; cycleId?: string; refresh: number; bump: () => void }) {
+export function SubsidiaryDashboard({ party, cycleId, refresh, bump, readOnly = false }: { party: string; cycleId?: string; refresh: number; bump: () => void; readOnly?: boolean }) {
   const { data, error, loading } = useAsync<Dashboard>(() => api.dashboard(party), [party, refresh]);
   const [err, setErr] = useState<string>();
   if (loading) return <div className="empty">Loading {party}’s ledger view…</div>;
@@ -46,8 +46,8 @@ export function SubsidiaryDashboard({ party, cycleId, refresh, bump }: { party: 
                 <span className={"v num " + (myNet.netAmount >= 0 ? "pos" : "neg")}>{signed(myNet.netAmount)}</span>
               </div>
               <div className="row" style={{ gap: 8 }}>
-                {myNet.status === "pending" && <button className="btn primary sm" onClick={() => act(api.approve(party, myNet.cycleId))}>Approve net position</button>}
-                {myNet.status === "approved" && myNet.netAmount < 0 && <button className="btn sm" onClick={() => act(api.allocate(party, myNet.cycleId))}>Reserve {fmt(-myNet.netAmount)} to settle</button>}
+                {myNet.status === "pending" && <button className="btn primary sm" onClick={() => act(api.approve(party, myNet.cycleId))} disabled={readOnly} title={readOnly ? "read-only deployment" : ""}>Approve net position</button>}
+                {myNet.status === "approved" && myNet.netAmount < 0 && <button className="btn sm" onClick={() => act(api.allocate(party, myNet.cycleId))} disabled={readOnly} title={readOnly ? "read-only deployment" : ""}>Reserve {fmt(-myNet.netAmount)} to settle</button>}
                 {myNet.status === "approved" && myNet.netAmount >= 0 && <span className="chip approved">approved · awaiting settlement</span>}
               </div>
             </div>

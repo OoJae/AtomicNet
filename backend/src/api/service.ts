@@ -3,7 +3,7 @@
 // The frontend uses friendly party names ("Sub_US"); we resolve them to full ids here.
 import { allocateOrReuse, submit, activeContracts, ofTemplate, type Contract } from "../ledger/client.ts";
 import { T, QN, create, exercise, dec, tuple2, tuple3 } from "../ledger/templates.ts";
-import { computeNetPositions, buildSettlementPlan, reductionRatio, type Invoice, type NetPosition } from "../netting/netting.ts";
+import { computeNetPositions, buildSettlementPlan, type Invoice, type NetPosition } from "../netting/netting.ts";
 import type { FxRate } from "../netting/fx.ts";
 import { demoInvoices, DEMO_RATES, DEMO_SUBS, DEMO_OPENING_DEPOSIT } from "../netting/demoData.ts";
 import * as agent from "../agent/agent.ts";
@@ -27,6 +27,28 @@ const hintOf = (name: string): string =>
 // The cycle currently being worked/demoed; views scope to it so re-runs stay clean.
 let activeCycleId: string | undefined;
 
+const DEFAULT_RATES: FxRate[] = DEMO_RATES;
+
+// Currencies the netting service can actually convert (USD + every FX-rate leg). Inputs
+// outside this set are rejected at the API boundary rather than failing deep in a submit.
+const KNOWN_CURRENCIES = new Set<string>([
+  "USD",
+  ...DEFAULT_RATES.map((r) => r.base),
+  ...DEFAULT_RATES.map((r) => r.quote),
+]);
+
+// --- Serialize ledger-mutating flows ----------------------------------------------------
+// All writes go through a single in-process promise chain so overlapping HTTP calls (two
+// visitors clicking "Run demo", or a click racing the boot seed) queue instead of
+// interleaving and corrupting each other's cycle. Internal `*_` impls are unlocked so a
+// locked flow (runDemo) can call other steps without deadlocking.
+let opChain: Promise<unknown> = Promise.resolve();
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = opChain.then(fn, fn);
+  opChain = run.then(() => undefined, () => undefined);
+  return run as Promise<T>;
+}
+
 export const nameOf = (id: string): string =>
   Object.entries(parties).find(([, v]) => v === id)?.[0] ?? id.split("::")[0] ?? id;
 
@@ -36,8 +58,6 @@ export function resolve(nameOrId: string): string {
   const byPrefix = Object.values(parties).find((id) => id.startsWith(nameOrId + "::"));
   return byPrefix ?? nameOrId;
 }
-
-const DEFAULT_RATES: FxRate[] = DEMO_RATES;
 
 async function find(party: string, qn: string, pred: (p: any) => boolean): Promise<Contract | undefined> {
   return ofTemplate(await activeContracts(party), qn).find((c) => pred(c.payload));
@@ -76,6 +96,13 @@ export async function bootstrap(): Promise<void> {
       ]);
     }
   }
+  // Adopt the most recent on-ledger cycle so views stay coherent after a restart. DevNet is
+  // persistent, so without this a redeploy would forget activeCycleId and getGraph would merge
+  // every historical cycle's invoices. (cycleId = "CYCLE-<ms timestamp>" sorts chronologically.)
+  const cycleIds = ofTemplate(await activeContracts(parties.Operator!), QN.NettingCycle)
+    .map((c) => String(c.payload.cycleId))
+    .sort();
+  if (cycleIds.length > 0) activeCycleId = cycleIds[cycleIds.length - 1];
 }
 
 export function getParties(): { name: string; party: string }[] {
@@ -123,7 +150,20 @@ export async function getVisibility(nameOrId: string) {
 }
 
 // ---------------------------------------------------------------------------- invoice writes
-export async function proposeInvoice(issuerName: string, body: { payer: string; amount: number; currency: string; invoiceId: string; dueDate?: string }) {
+/** Reject malformed / unsupported invoice inputs at the boundary (unauthenticated callers). */
+function validateInvoiceInput(body: { payer: string; amount: number; currency: string; invoiceId: string }): void {
+  if (!body || typeof body !== "object") throw new Error("invoice body is required");
+  if (!body.payer) throw new Error("payer is required");
+  if (typeof body.invoiceId !== "string" || body.invoiceId.length === 0 || body.invoiceId.length > 128)
+    throw new Error("invoiceId must be a non-empty string (<=128 chars)");
+  if (typeof body.currency !== "string" || !KNOWN_CURRENCIES.has(body.currency))
+    throw new Error(`unsupported currency: ${body.currency} (supported: ${[...KNOWN_CURRENCIES].join(", ")})`);
+  if (!Number.isFinite(body.amount) || body.amount <= 0 || body.amount > 1e12)
+    throw new Error("amount must be a positive, finite number");
+}
+
+async function proposeInvoiceImpl(issuerName: string, body: { payer: string; amount: number; currency: string; invoiceId: string; dueDate?: string }) {
+  validateInvoiceInput(body);
   const issuer = resolve(issuerName);
   await submit([issuer], [create(T.InvoiceProposal, {
     operator: parties.Operator!, issuer, payer: resolve(body.payer),
@@ -132,17 +172,20 @@ export async function proposeInvoice(issuerName: string, body: { payer: string; 
   })]);
   return { ok: true };
 }
+export const proposeInvoice = (issuerName: string, body: { payer: string; amount: number; currency: string; invoiceId: string; dueDate?: string }) =>
+  withLock(() => proposeInvoiceImpl(issuerName, body));
 
-export async function acceptInvoice(payerName: string, invoiceId: string) {
+async function acceptInvoiceImpl(payerName: string, invoiceId: string) {
   const payer = resolve(payerName);
   const prop = await find(payer, QN.InvoiceProposal, (p) => p.invoiceId === invoiceId);
   if (!prop) throw new Error(`no proposal ${invoiceId} for ${payerName}`);
   await submit([payer], [exercise(T.InvoiceProposal, prop.contractId, "AcceptInvoice", {})]);
   return { ok: true };
 }
+export const acceptInvoice = (payerName: string, invoiceId: string) => withLock(() => acceptInvoiceImpl(payerName, invoiceId));
 
 // ---------------------------------------------------------------------------- cycle
-export async function openCycle(body: { cycleId: string; participants?: string[]; settlementCurrency?: string; fxRates?: FxRate[] }) {
+async function openCycleImpl(body: { cycleId: string; participants?: string[]; settlementCurrency?: string; fxRates?: FxRate[] }) {
   const op = parties.Operator!;
   const participants = (body.participants ?? SUBS).map(resolve);
   const rates = body.fxRates ?? DEFAULT_RATES;
@@ -155,9 +198,14 @@ export async function openCycle(body: { cycleId: string; participants?: string[]
   activeCycleId = body.cycleId; // views scope to the cycle being worked
   return { ok: true, cycleId: body.cycleId };
 }
+export const openCycle = (body: { cycleId: string; participants?: string[]; settlementCurrency?: string; fxRates?: FxRate[] }) =>
+  withLock(() => openCycleImpl(body));
 
-/** Include all accepted invoices among participants, lock the cycle, compute nets, create NetPositions. */
-export async function lockCycle(cycleId: string) {
+/** Include this cycle's accepted invoices, lock the cycle, compute nets, create NetPositions.
+ *  Scoped + idempotent: only invoices raised for THIS cycle are swept (so a prior partial run
+ *  can't leak orphan invoices into the next), the empty-set guard runs BEFORE any side effect,
+ *  and NetPositions are created only for subsidiaries that don't already have one. */
+async function lockCycleImpl(cycleId: string) {
   const op = parties.Operator!;
   const cycle = await find(op, QN.NettingCycle, (p) => p.cycleId === cycleId);
   if (!cycle) throw new Error(`no cycle ${cycleId}`);
@@ -165,22 +213,43 @@ export async function lockCycle(cycleId: string) {
   const rates: FxRate[] = (cycle.payload.fxRates as any[]).map((r) => ({ base: r.base, quote: r.quote, rate: num(r.rate) }));
   const settlementCurrency: string = cycle.payload.settlementCurrency;
 
-  // Only invoices NOT yet claimed by any cycle (cycleId == None) are included — invoices
-  // settled in earlier cycles can never be netted twice (the model also asserts this).
+  // Scope to invoices actually raised for this cycle. runDemo tags each invoiceId with the
+  // cycle's tag (cycleId "CYCLE-<tag>" ; invoiceId "...-<tag>"), so a strict suffix match
+  // includes exactly this run's invoices and nothing orphaned from an earlier one.
+  const tag = cycleId.startsWith("CYCLE-") ? cycleId.slice("CYCLE-".length) : undefined;
   const isParticipant = (id: string) => participants.includes(id);
-  const invoiceContracts = ofTemplate(await activeContracts(op), QN.IntercompanyInvoice)
-    .filter((c) => isParticipant(c.payload.issuer) && isParticipant(c.payload.payer) && c.payload.cycleId == null);
-  for (const inv of invoiceContracts) {
+  const eligible = ofTemplate(await activeContracts(op), QN.IntercompanyInvoice).filter(
+    (c) =>
+      isParticipant(c.payload.issuer) &&
+      isParticipant(c.payload.payer) &&
+      c.payload.cycleId == null &&
+      (tag == null || String(c.payload.invoiceId).endsWith(`-${tag}`)),
+  );
+
+  // Guard BEFORE any IncludeInCycle/LockCycle side effect, so an empty cycle stays clean.
+  if (eligible.length === 0) throw new Error(`no eligible invoices to include in ${cycleId}`);
+
+  const invoices: Invoice[] = eligible.map((c) => ({
+    issuer: c.payload.issuer, payer: c.payload.payer, amount: num(c.payload.amount), currency: c.payload.currency,
+  }));
+  const nets = computeNetPositions(invoices, rates, settlementCurrency);
+
+  for (const inv of eligible) {
     await submit([op], [exercise(T.IntercompanyInvoice, inv.contractId, "IncludeInCycle", { inCycleId: cycleId })]);
   }
   await submit([op], [exercise(T.NettingCycle, cycle.contractId, "LockCycle", {})]);
 
-  const invoices: Invoice[] = invoiceContracts.map((c) => ({
-    issuer: c.payload.issuer, payer: c.payload.payer, amount: num(c.payload.amount), currency: c.payload.currency,
-  }));
-  if (invoices.length === 0) throw new Error(`no eligible invoices to include in ${cycleId}`);
-  const nets = computeNetPositions(invoices, rates, settlementCurrency);
+  // Create NetPositions idempotently: skip subs that already have one (safe to retry).
+  const already = new Set(
+    [
+      ...ofTemplate(await activeContracts(op), QN.NetPosition),
+      ...ofTemplate(await activeContracts(op), QN.ApprovedNetPosition),
+    ]
+      .filter((c) => c.payload.cycleId === cycleId)
+      .map((c) => c.payload.subsidiary),
+  );
   for (const n of nets) {
+    if (already.has(n.party)) continue;
     await submit([op], [create(T.NetPosition, {
       operator: op, subsidiary: n.party, regulator: parties.Regulator!, cycleId,
       settlementCurrency, netAmount: dec(n.netAmount),
@@ -188,20 +257,22 @@ export async function lockCycle(cycleId: string) {
   }
   return { ok: true, nets: nets.map((n) => ({ subsidiary: nameOf(n.party), netAmount: n.netAmount })) };
 }
+export const lockCycle = (cycleId: string) => withLock(() => lockCycleImpl(cycleId));
 
-export async function approveNetPosition(subName: string, cycleId: string) {
+async function approveNetPositionImpl(subName: string, cycleId: string) {
   const sub = resolve(subName);
   const np = await find(sub, QN.NetPosition, (p) => p.subsidiary === sub && p.cycleId === cycleId);
   if (!np) throw new Error(`no net position for ${subName} in ${cycleId}`);
   await submit([sub], [exercise(T.NetPosition, np.contractId, "ApproveNetPosition", {})]);
   return { ok: true };
 }
+export const approveNetPosition = (subName: string, cycleId: string) => withLock(() => approveNetPositionImpl(subName, cycleId));
 
 /** A net payer earmarks funds for the cycle — ONE allocation per planned transfer (the
  *  institutional pattern: reserve per payment instruction), so settle() can match each
  *  transfer to a co-signed allocation exactly. No-op for receivers / zero-net parties.
  *  The plan is deterministic from the approved positions, so settle() recomputes it. */
-export async function allocate(subName: string, cycleId: string) {
+async function allocateImpl(subName: string, cycleId: string) {
   const sub = resolve(subName);
   const approved = ofTemplate(await activeContracts(parties.Operator!), QN.ApprovedNetPosition).filter((c) => c.payload.cycleId === cycleId);
   const plan = buildSettlementPlan(approved.map((c) => ({ party: c.payload.subsidiary, netAmount: num(c.payload.netAmount) })));
@@ -215,15 +286,22 @@ export async function allocate(subName: string, cycleId: string) {
   }
   return { ok: true, allocated: total, allocations: myTransfers.length };
 }
+export const allocate = (subName: string, cycleId: string) => withLock(() => allocateImpl(subName, cycleId));
 
-/** Operator gathers allocations, builds the plan from approved positions, executes atomically. */
-export async function settle(cycleId: string) {
+/** Operator gathers allocations, builds the plan from approved positions, executes atomically.
+ *  The SettlementBatch now carries the Locked cycle + the on-ledger approvals; ExecuteSettlement
+ *  re-checks conservation and cycle/currency earmarks on-ledger (see Settlement.daml). */
+async function settleImpl(cycleId: string) {
   const op = parties.Operator!;
-  const approved = ofTemplate(await activeContracts(op), QN.ApprovedNetPosition).filter((c) => c.payload.cycleId === cycleId);
+  const cs = await activeContracts(op); // one consistent snapshot for cycle + approvals + allocations
+  const cycle = ofTemplate(cs, QN.NettingCycle).find((c) => c.payload.cycleId === cycleId);
+  if (!cycle) throw new Error(`no cycle ${cycleId} to settle`);
+  const approved = ofTemplate(cs, QN.ApprovedNetPosition).filter((c) => c.payload.cycleId === cycleId);
+  if (approved.length === 0) throw new Error(`no approved net positions for ${cycleId}`);
   const nets: NetPosition[] = approved.map((c) => ({ party: c.payload.subsidiary, netAmount: num(c.payload.netAmount) }));
   const plan = buildSettlementPlan(nets);
 
-  const allocs = ofTemplate(await activeContracts(op), QN.DepositAllocation).filter((c) => c.payload.cycleId === cycleId);
+  const allocs = ofTemplate(cs, QN.DepositAllocation).filter((c) => c.payload.cycleId === cycleId);
   const used = new Set<string>();
   const transfers: unknown[] = [];
   for (const t of plan.transfers) {
@@ -236,12 +314,15 @@ export async function settle(cycleId: string) {
   await submit([op], [create(T.SettlementBatch, {
     operator: op, regulator: parties.Regulator!, cycleId,
     transfers, payouts: plan.payouts.map((p) => tuple2(p.receiver, dec(p.amount))),
+    cycle: cycle.contractId,                      // the Locked cycle (on-ledger state gate)
+    approvals: approved.map((c) => c.contractId), // every subsidiary's co-signed approval
   })]);
   const batch = await find(op, QN.SettlementBatch, (p) => p.cycleId === cycleId);
   await submit([op], [exercise(T.SettlementBatch, batch!.contractId, "ExecuteSettlement", {})]);
   const balances = Object.fromEntries(await Promise.all(SUBS.map(async (s) => [s, await balanceOf(parties[s]!)])));
   return { ok: true, settled: plan.transfers.length, balances };
 }
+export const settle = (cycleId: string) => withLock(() => settleImpl(cycleId));
 
 // ---------------------------------------------------------------------------- views
 export async function getCycle(cycleId: string) {
@@ -266,7 +347,8 @@ export async function getCycle(cycleId: string) {
 }
 
 /** Gross invoice graph + net result for the Gross->Net visualization (operator view).
- *  Scoped to the active cycle (plus not-yet-included invoices) so demo re-runs stay clean. */
+ *  Scoped to the active cycle (plus not-yet-included invoices) so demo re-runs stay clean.
+ *  Returns activeCycleId so the frontend can hydrate the seeded cycle on first load. */
 export async function getGraph() {
   const op = parties.Operator!;
   const cs = await activeContracts(op);
@@ -279,7 +361,7 @@ export async function getGraph() {
     .filter((c) => activeCycleId == null || c.payload.cycleId === activeCycleId)
     .map((c) => ({ subsidiary: nameOf(c.payload.subsidiary), netAmount: num(c.payload.netAmount) }));
   const plan = positions.length ? buildSettlementPlan(positions.map((p) => ({ party: p.subsidiary, netAmount: p.netAmount }))) : { transfers: [], payouts: [] };
-  return { grossEdges, positions, netEdges: plan.transfers, reduction: { gross: grossEdges.length, net: plan.transfers.length } };
+  return { activeCycleId, grossEdges, positions, netEdges: plan.transfers, reduction: { gross: grossEdges.length, net: plan.transfers.length } };
 }
 
 export async function getAudit() {
@@ -294,22 +376,24 @@ export async function getAudit() {
 }
 
 /** Orchestrate a full demo cycle end-to-end (used by the boot seed and the "Run demo" button):
- *  the 20-invoice / 3-currency / 5-subsidiary dataset that nets down to 3 payments. */
-export async function runDemo() {
+ *  the 20-invoice / 3-currency / 5-subsidiary dataset that nets down to 3 payments. Runs under
+ *  the write-lock as a single unit (its internal steps call the unlocked impls). */
+async function runDemoImpl() {
   const tag = Date.now();
   const cycleId = `CYCLE-${tag}`;
   const invs = demoInvoices(tag);
   for (const i of invs) {
-    await proposeInvoice(i.issuer, i);
-    await acceptInvoice(i.payer, i.invoiceId);
+    await proposeInvoiceImpl(i.issuer, i);
+    await acceptInvoiceImpl(i.payer, i.invoiceId);
   }
-  await openCycle({ cycleId, participants: SUBS, fxRates: DEMO_RATES });
-  const locked = await lockCycle(cycleId);
-  for (const s of SUBS) await approveNetPosition(s, cycleId);
-  for (const s of SUBS) await allocate(s, cycleId);
-  const settled = await settle(cycleId);
+  await openCycleImpl({ cycleId, participants: SUBS, fxRates: DEMO_RATES });
+  const locked = await lockCycleImpl(cycleId);
+  for (const s of SUBS) await approveNetPositionImpl(s, cycleId);
+  for (const s of SUBS) await allocateImpl(s, cycleId);
+  const settled = await settleImpl(cycleId);
   return { cycleId, reduction: { gross: invs.length, net: settled.settled }, nets: locked.nets, ...settled };
 }
+export const runDemo = () => withLock(runDemoImpl);
 
 /** Ask the AI treasury agent to draft a netting cycle from a COMPACT summary of the
  *  operator-visible netting analysis (net positions + reduction, computed by the netting

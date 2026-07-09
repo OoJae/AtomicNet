@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type GraphView, type PartyInfo } from "./api";
 import { useAsync } from "./useApi";
 import { GrossToNetGraph } from "./components/GrossToNetGraph";
@@ -15,16 +15,29 @@ type Tab = "console" | "network" | "privacy";
 
 export function App() {
   const parties = useAsync<PartyInfo[]>(() => api.parties(), []);
+  const config = useAsync<{ writeLocked: boolean }>(() => api.config(), []);
+  const readOnly = config.data?.writeLocked ?? false;
   const [party, setParty] = useState("Operator");
   const [tab, setTab] = useState<Tab>("console");
   const [cycleId, setCycleId] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const bump = () => setRefresh((n) => n + 1);
 
+  // Hydrate the server's active (seeded) cycle on first load so the console shows the settled
+  // cycle immediately instead of an empty "—→—".
+  useEffect(() => {
+    if (cycleId) return;
+    api.graph().then((g) => g.activeCycleId && setCycleId(g.activeCycleId)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">Atomic<span className="dot">Net</span> <small>private atomic netting · Canton</small></div>
+        <div className="brand">
+          Atomic<span className="dot">Net</span> <small>private atomic netting · Canton</small>
+          {readOnly && <span className="ro-badge" title="This deployment is a live, read-only view of the real Canton DevNet ledger. Writes are disabled.">read-only · live DevNet</span>}
+        </div>
         <div className="switcher">
           <span className="lbl">Acting as</span>
           <div className="seg">
@@ -46,11 +59,11 @@ export function App() {
       <main className="main">
         {tab === "console" &&
           (party === "Operator" ? (
-            <OperatorConsole cycleId={cycleId} setCycleId={setCycleId} refresh={refresh} bump={bump} />
+            <OperatorConsole cycleId={cycleId} setCycleId={setCycleId} refresh={refresh} bump={bump} readOnly={readOnly} />
           ) : party === "Regulator" ? (
             <RegulatorView refresh={refresh} />
           ) : (
-            <SubsidiaryDashboard party={party} cycleId={cycleId} refresh={refresh} bump={bump} />
+            <SubsidiaryDashboard party={party} cycleId={cycleId} refresh={refresh} bump={bump} readOnly={readOnly} />
           ))}
         {tab === "network" && <NetworkTab refresh={refresh} />}
         {tab === "privacy" && <PrivacyProof party={party} refresh={refresh} />}
@@ -60,7 +73,7 @@ export function App() {
 }
 
 function NetworkTab({ refresh }: { refresh: number }) {
-  const { data } = useAsync<GraphView>(() => api.graph(), [refresh]);
+  const { data, error, loading } = useAsync<GraphView>(() => api.graph(), [refresh]);
   const [mode, setMode] = useState<"gross" | "net">("gross");
   return (
     <div className="card">
@@ -79,7 +92,11 @@ function NetworkTab({ refresh }: { refresh: number }) {
         </div>
       </div>
       <div className="card-b">
-        {data && data.grossEdges.length > 0 ? (
+        {loading ? (
+          <div className="empty">Loading the netting graph…</div>
+        ) : error ? (
+          <div className="empty">Failed to load the network: {error}</div>
+        ) : data && data.grossEdges.length > 0 ? (
           <GrossToNetGraph graph={data} mode={mode} />
         ) : (
           <div className="empty">No invoices yet. Switch to Operator → “Run full demo cycle”, then come back.</div>

@@ -157,7 +157,12 @@ async function main() {
     transferTuples.push(tuple3(alloc.contractId, t.receiver, dec(t.amount)));
   }
 
-  // 8. Operator assembles the SettlementBatch and executes it atomically.
+  // 8. Operator assembles the SettlementBatch and executes it atomically. ExecuteSettlement is
+  //    now bound to the on-ledger Locked cycle + the subsidiaries' approvals (see Settlement.daml).
+  const lockedCycle = await find(op, QN.NettingCycle, (p) => p.cycleId === cycleId);
+  const approvedCids = ofTemplate(await activeContracts(op), QN.ApprovedNetPosition)
+    .filter((c) => c.payload.cycleId === cycleId)
+    .map((c) => c.contractId);
   await submit(
     [op],
     [
@@ -167,6 +172,8 @@ async function main() {
         cycleId,
         transfers: transferTuples,
         payouts: plan.payouts.map((p) => tuple2(p.receiver, dec(p.amount))),
+        cycle: lockedCycle.contractId,
+        approvals: approvedCids,
       }),
     ],
   );

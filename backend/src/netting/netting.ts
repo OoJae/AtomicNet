@@ -69,14 +69,19 @@ export function computeNetPositions(
   return nets;
 }
 
-/** Build a minimal payer->receiver settlement plan (greedy fill). */
+/** Build a minimal payer->receiver settlement plan (greedy fill). Payers and receivers are
+ *  sorted by party so the plan is a pure function of the net-position SET, independent of the
+ *  order the positions arrive in — allocate() and settle() therefore always agree on it. */
 export function buildSettlementPlan(nets: NetPosition[]): SettlementPlan {
+  const byParty = (a: { party: string }, b: { party: string }) => a.party.localeCompare(b.party);
   const payers = nets
     .filter((n) => n.netAmount < 0)
-    .map((n) => ({ party: n.party, cents: toCents(-n.netAmount) }));
+    .map((n) => ({ party: n.party, cents: toCents(-n.netAmount) }))
+    .sort(byParty);
   const receivers = nets
     .filter((n) => n.netAmount > 0)
-    .map((n) => ({ party: n.party, cents: toCents(n.netAmount) }));
+    .map((n) => ({ party: n.party, cents: toCents(n.netAmount) }))
+    .sort(byParty);
 
   const transfers: Transfer[] = [];
   let pi = 0;

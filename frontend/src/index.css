@@ -115,3 +115,29 @@ td.r, th.r { text-align: right; }
 .kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
 .legend { display: flex; gap: 14px; align-items: center; font-size: 12px; color: var(--muted); }
 .legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+
+/* read-only (live DevNet view) badge */
+.ro-badge {
+  align-self: center; margin-left: 4px; padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--amber); background: var(--amber-soft); border: 1px solid #fcd9a8; cursor: help;
+}
+
+/* responsive: the 8-party switcher + tabs must not overflow a narrow viewport */
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; height: auto; gap: 12px; padding: 10px 16px; }
+  .tabs { margin-left: 0; }
+  .switcher { width: 100%; order: 3; }
+  .seg { overflow-x: auto; max-width: 100%; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .seg button { flex: 0 0 auto; }
+  .grid.c3 { grid-template-columns: 1fr 1fr; }
+  .main { padding: 16px; }
+}
+@media (max-width: 640px) {
+  .grid.c2, .grid.c3 { grid-template-columns: 1fr; }
+  .card-h { flex-wrap: wrap; }
+  .card-h .row { margin-left: 0 !important; width: 100%; flex-wrap: wrap; }
+  .big-ratio { font-size: 32px; }
+  .spread { flex-wrap: wrap; gap: 10px; }
+  .brand { font-size: 15px; }
+}

@@ -9,7 +9,23 @@ import * as svc from "./service.ts";
 const app = new Hono();
 app.use("/*", cors());
 
-app.get("/api/health", (c) => c.json({ ok: true }));
+// Write-lock: on a PUBLICLY-exposed deploy that drives REAL shared-network parties (the
+// DevNet service), set WRITE_MODE=locked so the internet can VIEW the live ledger but cannot
+// drive our parties / burn synchronizer traffic / trigger billable agent calls. Mutating
+// requests then require the x-atomicnet-key header to match WRITE_SECRET. Unset (default) =
+// fully open, for the self-contained sandbox demo and local dev.
+const WRITE_LOCKED = process.env.WRITE_MODE === "locked";
+const WRITE_SECRET = process.env.WRITE_SECRET ?? "";
+app.use("/api/*", async (c, next) => {
+  const mutating = c.req.method === "POST" || c.req.method === "PUT" || c.req.method === "DELETE";
+  if (WRITE_LOCKED && mutating && c.req.header("x-atomicnet-key") !== WRITE_SECRET) {
+    return c.json({ error: "read-only: writes are disabled on this deployment" }, 403);
+  }
+  return next();
+});
+
+app.get("/api/health", (c) => c.json({ ok: true, writeLocked: WRITE_LOCKED }));
+app.get("/api/config", (c) => c.json({ writeLocked: WRITE_LOCKED }));
 app.get("/api/parties", (c) => c.json(svc.getParties()));
 
 // Per-party reads (the ledger filters by stakeholder).
@@ -39,8 +55,13 @@ app.post("/api/agent/propose", async (c) => c.json(await svc.agentPropose()));
 app.post("/api/demo/run", async (c) => c.json(await svc.runDemo()));
 
 app.onError((err, c) => {
+  // Log the full error server-side; return a generic message so anonymous public callers
+  // don't get raw ledger/OAuth/agent internals echoed back.
   console.error("[api error]", err);
-  return c.json({ error: String((err as Error)?.message ?? err) }, 500);
+  const msg = String((err as Error)?.message ?? err);
+  // Client-actionable validation messages are safe to surface; everything else is opaque.
+  const safe = /^(invoice|amount|payer|invoiceId|unsupported|no eligible|no cycle|no proposal|no net position|no approved|missing allocation|read-only)/i.test(msg);
+  return c.json({ error: safe ? msg : "internal error" }, 500);
 });
 
 // In production, serve the built frontend from the same origin (no proxy / CORS needed).

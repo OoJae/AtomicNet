@@ -60,7 +60,7 @@ multiCurrencySettlement = script do
   _ <- submit operator do exerciseCmd invUkUs IncludeInCycle with inCycleId = cycleId
   _ <- submit operator do exerciseCmd invUsDe IncludeInCycle with inCycleId = cycleId
   _ <- submit operator do exerciseCmd invDeUk IncludeInCycle with inCycleId = cycleId
-  _ <- submit operator do exerciseCmd cycleOpen LockCycle
+  cycleLocked <- submit operator do exerciseCmd cycleOpen LockCycle
 
   -- Net positions in USD, each invoice converted exactly once via FX.
   let usdUkUs = convert rates "USD" "USD" 1000.0   -- 1000
@@ -86,9 +86,9 @@ multiCurrencySettlement = script do
   npUS <- mkNet subUS netUS
   npUK <- mkNet subUK netUK
   npDE <- mkNet subDE netDE
-  _ <- submit subUS do exerciseCmd npUS ApproveNetPosition
-  _ <- submit subUK do exerciseCmd npUK ApproveNetPosition
-  _ <- submit subDE do exerciseCmd npDE ApproveNetPosition
+  apUS <- submit subUS do exerciseCmd npUS ApproveNetPosition
+  apUK <- submit subUK do exerciseCmd npUK ApproveNetPosition
+  apDE <- submit subDE do exerciseCmd npDE ApproveNetPosition
 
   -- Cash leg is USD. Bank issues opening deposits; net payers allocate their |net|.
   let issue owner amount = submit bank do
@@ -110,6 +110,8 @@ multiCurrencySettlement = script do
       cycleId
       transfers = [(allocUS, subUK, 450.0), (allocDE, subUK, 50.0)]
       payouts = [(subUK, 500.0)]
+      cycle = Some cycleLocked
+      approvals = Some [apUS, apUK, apDE]
   _ <- submit operator do exerciseCmd batch ExecuteSettlement
 
   -- Final USD balances = opening +/- net.

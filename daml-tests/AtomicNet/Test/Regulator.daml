@@ -63,6 +63,8 @@ regulatorDisclosure = script do
       cycleId = "C"
       transfers = [(allocDE, subUK, 50.0)]
       payouts = [(subUK, 50.0)]
+      cycle = None        -- this test only checks the regulator can SEE the batch, not execute it
+      approvals = None
 
   -- The regulator also sees the cycle and the settlement batch (full audit trail)...
   rCycle <- queryContractId regulator cycle

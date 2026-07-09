@@ -5,6 +5,8 @@ module AtomicNet.Test.Settlement where
 
 import AtomicNet.Types
 import AtomicNet.Cash
+import AtomicNet.Cycle
+import AtomicNet.NetPosition
 import AtomicNet.Settlement
 
 import Daml.Script
@@ -33,21 +35,40 @@ settlement = script do
   _depUK <- issue subUK
   depDE  <- issue subDE
 
-  -- Net positions (from the lifecycle): US -400, DE -200, UK +600. The two net payers
-  -- earmark exactly their |net| via a bank+owner co-signed allocation.
+  -- The cycle must exist and be Locked, with each subsidiary's net position approved on-ledger,
+  -- before settlement — ExecuteSettlement binds to those. Net positions: US -400, DE -200, UK +600.
+  let cycleId = "CYCLE-2026-06"
+  cycleOpen <- submit operator do
+    createCmd NettingCycle with
+      operator; regulator; participants = [subUS, subUK, subDE]
+      settlementCurrency = "USD"; fxRates = []; cycleId; status = Open
+  cycleLocked <- submit operator do exerciseCmd cycleOpen LockCycle
+  let mkNet subsidiary netAmount = submit operator do
+        createCmd NetPosition with
+          operator; subsidiary; regulator; cycleId; settlementCurrency = "USD"; netAmount
+  npUS <- mkNet subUS (-400.0)
+  npUK <- mkNet subUK   600.0
+  npDE <- mkNet subDE (-200.0)
+  apUS <- submit subUS do exerciseCmd npUS ApproveNetPosition
+  apUK <- submit subUK do exerciseCmd npUK ApproveNetPosition
+  apDE <- submit subDE do exerciseCmd npDE ApproveNetPosition
+
+  -- The two net payers earmark exactly their |net| via a bank+owner co-signed allocation.
   (allocUS, _remUS) <- submit subUS do
-    exerciseCmd depUS Allocate with operator, allocAmount = 400.0, cycleId = "CYCLE-2026-06"
+    exerciseCmd depUS Allocate with operator, allocAmount = 400.0, cycleId
   (allocDE, _remDE) <- submit subDE do
-    exerciseCmd depDE Allocate with operator, allocAmount = 200.0, cycleId = "CYCLE-2026-06"
+    exerciseCmd depDE Allocate with operator, allocAmount = 200.0, cycleId
 
   -- Operator assembles the batch: US pays UK 400, DE pays UK 200; UK should net +600.
   batch <- submit operator do
     createCmd SettlementBatch with
       operator
       regulator
-      cycleId = "CYCLE-2026-06"
+      cycleId
       transfers = [(allocUS, subUK, 400.0), (allocDE, subUK, 200.0)]
       payouts = [(subUK, 600.0)]
+      cycle = Some cycleLocked
+      approvals = Some [apUS, apUK, apDE]
 
   -- ONE atomic transaction settles every leg.
   _newDeposits <- submit operator do exerciseCmd batch ExecuteSettlement

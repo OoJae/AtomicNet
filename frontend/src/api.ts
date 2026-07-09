@@ -8,7 +8,7 @@ export interface CyclePosition { subsidiary: string; netAmount: number; approved
 export interface CycleView { cycleId: string; status: string; settlementCurrency: string; fxRates: { base: string; quote: string; rate: number }[]; positions: CyclePosition[]; allApproved: boolean; reduction: { gross: number; net: number } }
 export interface GraphEdge { from: string; to: string; amount: number; currency: string }
 export interface NetEdge { payer: string; receiver: string; amount: number }
-export interface GraphView { grossEdges: GraphEdge[]; positions: { subsidiary: string; netAmount: number }[]; netEdges: NetEdge[]; reduction: { gross: number; net: number } }
+export interface GraphView { activeCycleId?: string; grossEdges: GraphEdge[]; positions: { subsidiary: string; netAmount: number }[]; netEdges: NetEdge[]; reduction: { gross: number; net: number } }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch("/api" + path, {
@@ -21,6 +21,7 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body?: unknown) => http<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
 
 export const api = {
+  config: () => http<{ writeLocked: boolean }>("/config"),
   parties: () => http<PartyInfo[]>("/parties"),
   dashboard: (party: string) => http<Dashboard>(`/p/${party}/dashboard`),
   visibility: (party: string) => http<Visibility>(`/p/${party}/visibility`),

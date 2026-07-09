@@ -1,11 +1,19 @@
 -- Atomic settlement. The operator assembles a SettlementBatch of pre-authorized transfers
 -- (each backed by a payer's bank+owner co-signed DepositAllocation) and executes them in ONE
--- transaction. Per-receiver totals AND system conservation are checked inside the choice, so
--- any shortfall reverts the entire settlement: no partial settlement, no exposure.
+-- transaction. The choice binds settlement to the ON-LEDGER cycle + approved net positions:
+-- it requires the cycle to be Locked, re-derives that the approved positions conserve to zero,
+-- checks the payouts against the approved receivers, and verifies every allocation is earmarked
+-- for THIS cycle in the cycle's settlement currency — then disburses and transitions the cycle
+-- to Settled. Any shortfall or mismatch reverts the entire settlement: no partial settlement,
+-- no exposure, and no way for the operator to settle an unapproved / non-conserved set.
 module AtomicNet.Settlement where
 
+import AtomicNet.Types
 import AtomicNet.Cash
+import AtomicNet.Cycle
+import AtomicNet.NetPosition
 import DA.Foldable (forA_)   -- forA_ is NOT re-exported by Prelude; it lives in DA.Foldable
+import DA.List (sort)         -- sort for the payouts-vs-approved equality check
 
 template SettlementBatch
   with
@@ -14,6 +22,10 @@ template SettlementBatch
     cycleId   : Text
     transfers : [(ContractId DepositAllocation, Party, Decimal)]   -- (payer allocation, receiver, amount to pay)
     payouts   : [(Party, Decimal)]                                 -- expected net each receiver must end up with
+    -- The on-ledger gates. Optional for package upgrade-compatibility with the pre-hardening
+    -- schema; ExecuteSettlement requires them to be present (Some).
+    cycle     : Optional (ContractId NettingCycle)                 -- the Locked cycle being settled
+    approvals : Optional [ContractId ApprovedNetPosition]          -- every subsidiary's co-signed approval
   where
     signatory operator
     observer  regulator
@@ -21,23 +33,57 @@ template SettlementBatch
     choice ExecuteSettlement : [ContractId Deposit]
       controller operator
       do
-        -- 1. Disburse every leg. Each nested Disburse surfaces its allocation's {bank, owner}
+        -- 0. The cycle must exist, match, and be Locked (the on-ledger state gate). The operator
+        --    is the cycle's signatory, so this fetch is authorized.
+        cycleCid <- optional (fail "ExecuteSettlement: cycle contract is required") pure cycle
+        cyc <- fetch cycleCid
+        assertMsg "ExecuteSettlement: cycle id mismatch" (cyc.cycleId == cycleId)
+        assertMsg "ExecuteSettlement: cycle is not Locked" (cyc.status == Locked)
+        let settlementCcy = cyc.settlementCurrency
+
+        -- 1. Settlement is bound to the subsidiaries' on-ledger approvals: fetch each approved
+        --    position, require it belongs to this cycle in the settlement currency, and re-derive
+        --    conservation (Sigma net == 0) FROM THE APPROVALS — not from operator-supplied data.
+        approvalCids <- optional (fail "ExecuteSettlement: approvals are required") pure approvals
+        approved <- forA approvalCids \apCid -> do
+          ap <- fetch apCid
+          assertMsg "ExecuteSettlement: approval is for a different cycle" (ap.cycleId == cycleId)
+          assertMsg "ExecuteSettlement: approval currency mismatch" (ap.settlementCurrency == settlementCcy)
+          pure ap
+        let netSum = sum [ ap.netAmount | ap <- approved ]
+        assertMsg "ExecuteSettlement: approved net positions are not conserved (Sigma net /= 0)" (netSum == 0.0)
+
+        -- 2. The payouts must be EXACTLY the positive (receiving) approved positions — the operator
+        --    cannot invent a receiver or amount that no subsidiary approved.
+        let expectedPayouts = sort [ (ap.subsidiary, ap.netAmount) | ap <- approved, ap.netAmount > 0.0 ]
+        assertMsg "ExecuteSettlement: payouts do not match the approved receiving positions"
+          (sort payouts == expectedPayouts)
+
+        -- 3. Disburse every leg. Each nested Disburse surfaces its allocation's {bank, owner}
         --    authority locally, so the operator can move every payer's cash in this one tx.
+        --    Each allocation must be earmarked for THIS cycle in the settlement currency.
         disbursed <- forA transfers \(allocCid, recipient, payAmount) -> do
+          alloc <- fetch allocCid
+          assertMsg "ExecuteSettlement: allocation is earmarked for a different cycle" (alloc.cycleId == cycleId)
+          assertMsg "ExecuteSettlement: allocation currency mismatch" (alloc.currency == settlementCcy)
           (paid, _change) <- exercise allocCid Disburse with recipient, payAmount
           pure (recipient, payAmount, paid)
 
-        -- 2. Every listed receiver must end up with exactly its expected net.
+        -- 4. Every listed receiver must end up with exactly its expected net.
         forA_ payouts \(receiver, expected) -> do
           let got = sum [ amt | (r, amt, _) <- disbursed, r == receiver ]
           assertMsg
             ("ExecuteSettlement: " <> show receiver <> " expected " <> show expected <> " but got " <> show got)
             (got == expected)
 
-        -- 3. System conservation: total moved in == total owed out (the Sigma-net invariant
-        --    at the cash layer). Together with (2) this rejects any over/under or mis-routing.
+        -- 5. System conservation: total moved in == total owed out (the Sigma-net invariant
+        --    at the cash layer). Together with (4) this rejects any over/under or mis-routing.
         let totalIn  = sum [ amt | (_, amt, _) <- disbursed ]
         let totalOut = sum [ e   | (_, e) <- payouts ]
         assertMsg "ExecuteSettlement: settlement not conserved (total in /= total out)" (totalIn == totalOut)
+
+        -- 6. Transition the cycle Locked -> Settled in the same transaction, so this cycle can
+        --    never be settled twice (a second batch would fail step 0's Locked check).
+        _ <- exercise cycleCid MarkSettled
 
         pure [ dep | (_, _, dep) <- disbursed ]
