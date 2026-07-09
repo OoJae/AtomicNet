@@ -300,16 +300,24 @@ export async function runDemo() {
   return { cycleId, reduction: { gross: invs.length, net: settled.settled }, nets: locked.nets, ...settled };
 }
 
-/** Ask the AI treasury agent to draft a netting cycle from the OPERATOR-visible invoices.
- *  Returns a proposal + rationale only — there is NO path from here to settlement. */
+/** Ask the AI treasury agent to draft a netting cycle from a COMPACT summary of the
+ *  operator-visible netting analysis (net positions + reduction, computed by the netting
+ *  service). Returns a proposal + rationale only — there is NO path from here to settlement. */
 export async function agentPropose() {
   const op = parties.Operator!;
-  const invoices = ofTemplate(await activeContracts(op), QN.IntercompanyInvoice).map((c) => ({
-    invoiceId: c.payload.invoiceId,
-    issuer: nameOf(c.payload.issuer),
-    payer: nameOf(c.payload.payer),
-    amount: num(c.payload.amount),
-    currency: c.payload.currency,
-  }));
-  return agent.propose({ invoices, settlementCurrency: "USD" });
+  const cs = await activeContracts(op);
+  const inScope = (c: Contract) => activeCycleId == null || c.payload.cycleId == null || c.payload.cycleId === activeCycleId;
+  const invoices: Invoice[] = ofTemplate(cs, QN.IntercompanyInvoice)
+    .filter(inScope)
+    .map((c) => ({ issuer: nameOf(c.payload.issuer), payer: nameOf(c.payload.payer), amount: num(c.payload.amount), currency: c.payload.currency }));
+  const nets = computeNetPositions(invoices, DEFAULT_RATES, "USD");
+  const plan = buildSettlementPlan(nets);
+  return agent.propose({
+    invoiceCount: invoices.length,
+    currencies: [...new Set(invoices.map((i) => i.currency))].sort(),
+    settlementCurrency: "USD",
+    fxRates: DEFAULT_RATES,
+    netPositions: nets.map((n) => ({ party: nameOf(n.party), netUsd: n.netAmount })),
+    reduction: { gross: invoices.length, net: plan.transfers.length },
+  });
 }
