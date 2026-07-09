@@ -51,8 +51,9 @@ app.get("/api/audit", async (c) => c.json(await svc.getAudit()));
 // AI treasury agent: positions in -> proposal + rationale out (it proposes, never settles).
 app.post("/api/agent/propose", async (c) => c.json(await svc.agentPropose()));
 
-// Demo orchestration (full cycle end to end).
+// Demo orchestration: full cycle end to end, or stage a cycle for hands-on approval.
 app.post("/api/demo/run", async (c) => c.json(await svc.runDemo()));
+app.post("/api/demo/prepare", async (c) => c.json(await svc.prepareCycle()));
 
 app.onError((err, c) => {
   // Log the full error server-side; return a generic message so anonymous public callers

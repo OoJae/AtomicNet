@@ -44,6 +44,10 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump, readOnly }
     const r = await run("demo", api.runDemo());
     if (r) setCycleId(r.cycleId);
   }
+  async function stage() {
+    const r = await run("prepare", api.prepareCycle());
+    if (r) setCycleId(r.cycleId);
+  }
 
   const settled = cycle?.status === "Settled";
 
@@ -68,8 +72,14 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump, readOnly }
         <div className="card-h">
           <h3>Cycle controls</h3>
           <div className="row" style={{ marginLeft: "auto", gap: 8 }}>
-            <button className="btn sm" disabled title="Manual invoice entry isn’t wired in this demo — use ▷ Run full demo cycle">Open new cycle</button>
-            <button className="btn sm" disabled title="Manual invoice entry isn’t wired in this demo — use ▷ Run full demo cycle">Lock &amp; compute nets</button>
+            <button
+              className="btn sm"
+              onClick={stage}
+              disabled={readOnly || busy}
+              title={readOnly ? "read-only deployment" : "raise the invoices & compute nets, then approve + settle by hand (human-in-the-loop)"}
+            >
+              {busyAction === "prepare" ? "Staging…" : "Stage cycle for approval"}
+            </button>
             <button
               className="btn primary sm"
               onClick={() => cycleId && run("settle", api.settle(cycleId))}
@@ -96,8 +106,8 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump, readOnly }
             ))}
           </tbody>
         </table>
-        {cycle && cycle.positions.length > 0 && !cycle.allApproved && (
-          <div className="card-b"><div className="note">Execute is disabled until every subsidiary approves &amp; allocates (switch the “Acting as” party to a subsidiary to do so).</div></div>
+        {cycle && cycle.positions.length > 0 && !cycle.allApproved && !settled && (
+          <div className="card-b"><div className="banner">👉 This cycle is staged. Act as each subsidiary (the top-bar <b>“Acting as”</b> switcher) to <b>Approve</b> its net position — and <b>Reserve</b> funds if it’s a payer — then come back as <b>Operator</b> and click <b>Execute settlement</b> to settle every leg atomically on-ledger.</div></div>
         )}
         {settled && (
           <div className="card-b"><div className="note">✓ This cycle is settled on-ledger — balances moved atomically in one transaction.</div></div>

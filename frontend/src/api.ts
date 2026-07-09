@@ -37,6 +37,7 @@ export const api = {
   allocate: (party: string, id: string) => post(`/p/${party}/cycle/${id}/allocate`),
   settle: (id: string) => post<{ ok: boolean; settled: number; balances: Record<string, number> }>(`/cycle/${id}/settle`),
   runDemo: () => post<{ cycleId: string; nets: { subsidiary: string; netAmount: number }[]; settled: number; balances: Record<string, number> }>("/demo/run"),
+  prepareCycle: () => post<{ cycleId: string; gross: number; nets: { subsidiary: string; netAmount: number }[] }>("/demo/prepare"),
 };
 
 export const fmt = (n: number, ccy = "USD") =>

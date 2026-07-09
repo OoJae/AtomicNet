@@ -379,10 +379,11 @@ export async function getAudit() {
   return { party: "Regulator", totalVisible: cs.length, byType };
 }
 
-/** Orchestrate a full demo cycle end-to-end (used by the boot seed and the "Run demo" button):
- *  the 20-invoice / 3-currency / 5-subsidiary dataset that nets down to 3 payments. Runs under
- *  the write-lock as a single unit (its internal steps call the unlocked impls). */
-async function runDemoImpl() {
+/** Stage a fresh cycle up to the approval step: raise the 20 demo invoices, open + lock the
+ *  cycle, and compute the net positions — then STOP before approvals/settlement, so a human can
+ *  approve each subsidiary and click Execute live (the human-in-the-loop flow). This is the slow
+ *  part (raising 20 invoices), done once, so the judge's own clicks are the fast, meaningful ones. */
+async function prepareCycleImpl() {
   const tag = Date.now();
   const cycleId = `CYCLE-${tag}`;
   const invs = demoInvoices(tag);
@@ -392,10 +393,20 @@ async function runDemoImpl() {
   }
   await openCycleImpl({ cycleId, participants: SUBS, fxRates: DEMO_RATES });
   const locked = await lockCycleImpl(cycleId);
+  return { cycleId, gross: invs.length, nets: locked.nets };
+}
+export const prepareCycle = () => withLock(prepareCycleImpl);
+
+/** Orchestrate a full demo cycle end-to-end (used by the boot seed and the "Run demo" button):
+ *  the 20-invoice / 3-currency / 5-subsidiary dataset that nets down to 3 payments. Runs under
+ *  the write-lock as a single unit (its internal steps call the unlocked impls). */
+async function runDemoImpl() {
+  const prep = await prepareCycleImpl();
+  const cycleId = prep.cycleId;
   for (const s of SUBS) await approveNetPositionImpl(s, cycleId);
   for (const s of SUBS) await allocateImpl(s, cycleId);
   const settled = await settleImpl(cycleId);
-  return { cycleId, reduction: { gross: invs.length, net: settled.settled }, nets: locked.nets, ...settled };
+  return { cycleId, reduction: { gross: prep.gross, net: settled.settled }, nets: prep.nets, ...settled };
 }
 export const runDemo = () => withLock(runDemoImpl);
 
