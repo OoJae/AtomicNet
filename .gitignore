@@ -33,3 +33,7 @@ Thumbs.db
 
 # --- Claude Code (personal/local) ---
 .claude/settings.local.json
+
+# Playwright MCP scratch (screenshots, a11y snapshots, console logs)
+.playwright-mcp/
+network-*.png

@@ -4,13 +4,14 @@ import { useAsync } from "../useApi";
 export function RegulatorView({ refresh }: { refresh: number }) {
   const audit = useAsync(() => api.audit(), [refresh]);
   const graph = useAsync<GraphView>(() => api.graph(), [refresh]);
-  if (audit.loading) return <div className="empty">Loading…</div>;
+  if (audit.loading) return <div className="empty">Loading the regulator’s audit view…</div>;
+  if (audit.error) return <div className="empty">Failed to load the audit trail: {audit.error}</div>;
 
   return (
     <div className="stack">
       <div className="banner">
         Selective disclosure: the regulator is an explicit observer on cycles, net positions, approvals and
-        settlements — reconstructing the full audit trail — <b>without</b> subsidiaries ever seeing each other.
+        settlements — reconstructing the netting &amp; settlement trail — <b>without</b> subsidiaries ever seeing each other.
       </div>
       <div className="grid c2">
         <div className="card">

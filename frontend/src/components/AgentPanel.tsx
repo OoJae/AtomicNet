@@ -8,7 +8,7 @@ interface Proposal {
 // The AI treasury agent panel. It proposes; a human disposes; the contract constrains.
 // The "Analyze" call hits /api/agent/propose (wired in Stage 4c). The agent output can only
 // pre-fill the proposal — there is NO path from here to settlement.
-export function AgentPanel({ onApprove }: { onApprove: () => void }) {
+export function AgentPanel({ onApprove, readOnly = false }: { onApprove: () => void; readOnly?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Proposal>();
   const [error, setError] = useState<string>();
@@ -41,10 +41,11 @@ export function AgentPanel({ onApprove }: { onApprove: () => void }) {
           on-ledger approval and a human's Execute click.
         </p>
         <div>
-          <button className="btn" onClick={analyze} disabled={loading}>
+          <button className="btn" onClick={analyze} disabled={loading || readOnly} title={readOnly ? "read-only deployment" : ""}>
             {loading ? "Analyzing positions…" : "Analyze open positions"}
           </button>
         </div>
+        {readOnly && <div className="note">The agent is disabled on this read-only deployment (it calls a billable model API).</div>}
         {error && <div className="note" style={{ color: "var(--neg)" }}>Agent offline: {error}</div>}
         {result && (
           <div className="stack">
@@ -53,8 +54,8 @@ export function AgentPanel({ onApprove }: { onApprove: () => void }) {
               {JSON.stringify(result.proposal, null, 2)}
             </pre>
             <div className="spread">
-              <span className="note">⛔ The agent cannot settle. Approving only opens a cycle for subsidiaries to consent to.</span>
-              <button className="btn primary" onClick={onApprove}>Approve &amp; propose cycle</button>
+              <span className="note">⛔ The agent cannot settle. Approving only runs the netting cycle for subsidiaries to consent to.</span>
+              <button className="btn primary" onClick={onApprove} disabled={readOnly} title={readOnly ? "read-only deployment" : ""}>Approve &amp; propose cycle</button>
             </div>
           </div>
         )}

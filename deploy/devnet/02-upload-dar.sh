@@ -4,7 +4,7 @@
 set -e
 BASE="${JSON_API_URL:-http://127.0.0.1:80}"
 HOST_HEADER="${JSON_API_HOST_HEADER:-json-ledger-api.localhost}"
-DAR="${DAR:-$(dirname "$0")/../../daml/.daml/dist/atomicnet-model-0.1.0.dar}"
+DAR="${DAR:-$(dirname "$0")/../../daml/.daml/dist/atomicnet-model-0.2.0.dar}"
 [ -f "$DAR" ] || { echo "DAR not found: $DAR (run: dpm build --all)"; exit 1; }
 echo "uploading $DAR -> $BASE/v2/dars?vetAllPackages=true (Host: $HOST_HEADER)"
 curl -sS -X POST "$BASE/v2/dars?vetAllPackages=true" \

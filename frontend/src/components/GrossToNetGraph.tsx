@@ -23,6 +23,18 @@ export function GrossToNetGraph({ graph, mode }: { graph: GraphView; mode: "gros
 
   const netByParty: Record<string, number> = Object.fromEntries(graph.positions.map((p) => [p.subsidiary, p.netAmount]));
 
+  // Fan co-directional parallel invoices (e.g. two UK->US invoices in USD + GBP) into distinct
+  // arcs so every one of the 20 gross strands — including same-pair multi-currency flows — is
+  // visible instead of collapsing onto a single overlapping curve.
+  const grossCurves = useMemo(() => {
+    const seen: Record<string, number> = {};
+    return graph.grossEdges.map((e) => {
+      const key = `${e.to}->${e.from}`; // rendered direction: payer -> issuer
+      const j = (seen[key] = (seen[key] ?? -1) + 1);
+      return 0.16 + 0.13 * j; // nested arcs, all bowing the same way
+    });
+  }, [graph]);
+
   const path = (from: string, to: string, curve: number) => {
     const a = pos[from], b = pos[to];
     if (!a || !b) return "";
@@ -51,7 +63,7 @@ export function GrossToNetGraph({ graph, mode }: { graph: GraphView; mode: "gros
       {/* GROSS: payment flows payer -> issuer (to -> from), curved + currency-coloured */}
       <g style={{ opacity: mode === "gross" ? 1 : 0, transition: "opacity .55s ease" }}>
         {graph.grossEdges.map((e, i) => (
-          <path key={i} d={path(e.to, e.from, 0.2)} fill="none" stroke={CCY[e.currency] ?? "#94a3b8"} strokeWidth={2.2} markerEnd="url(#ag)" opacity={0.75} />
+          <path key={i} d={path(e.to, e.from, grossCurves[i]!)} fill="none" stroke={CCY[e.currency] ?? "#94a3b8"} strokeWidth={2.2} markerEnd="url(#ag)" opacity={0.75} />
         ))}
       </g>
 

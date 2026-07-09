@@ -1,0 +1,81 @@
+-- SETTLEMENT-GATE proof: ExecuteSettlement is now bound to the on-ledger cycle + approvals.
+-- The operator CANNOT settle without the subsidiaries' approvals, and CANNOT pay out anything
+-- other than exactly the approved receiving positions. This proves the headline guarantee
+-- "settlement requires on-ledger ApproveNetPosition" is enforced by the LEDGER, not the app.
+module AtomicNet.Test.SettlementGate where
+
+import AtomicNet.Types
+import AtomicNet.Cash
+import AtomicNet.Cycle
+import AtomicNet.NetPosition
+import AtomicNet.Settlement
+
+import Daml.Script
+
+settlementGate : Script ()
+settlementGate = script do
+  operator  <- allocatePartyByHint (PartyIdHint "Operator")
+  subUS     <- allocatePartyByHint (PartyIdHint "Sub_US")
+  subUK     <- allocatePartyByHint (PartyIdHint "Sub_UK")
+  subDE     <- allocatePartyByHint (PartyIdHint "Sub_DE")
+  bank      <- allocatePartyByHint (PartyIdHint "Bank")
+  regulator <- allocatePartyByHint (PartyIdHint "Regulator")
+
+  -- A valid, conserved, Locked cycle with every net position approved on-ledger.
+  let cycleId = "CYCLE-GATE"
+  cycleOpen <- submit operator do
+    createCmd NettingCycle with
+      operator; regulator; participants = [subUS, subUK, subDE]
+      settlementCurrency = "USD"; fxRates = []; cycleId; status = Open
+  cycleLocked <- submit operator do exerciseCmd cycleOpen LockCycle
+  let mkNet subsidiary netAmount = submit operator do
+        createCmd NetPosition with
+          operator; subsidiary; regulator; cycleId; settlementCurrency = "USD"; netAmount
+  npUS <- mkNet subUS (-400.0)
+  npUK <- mkNet subUK   600.0
+  npDE <- mkNet subDE (-200.0)
+  apUS <- submit subUS do exerciseCmd npUS ApproveNetPosition
+  apUK <- submit subUK do exerciseCmd npUK ApproveNetPosition
+  apDE <- submit subDE do exerciseCmd npDE ApproveNetPosition
+
+  let issue owner = submit bank do createCmd Deposit with bank, owner, currency = "USD", amount = 1000.0
+  depUS <- issue subUS
+  _     <- issue subUK
+  depDE <- issue subDE
+  (allocUS, _) <- submit subUS do exerciseCmd depUS Allocate with operator, allocAmount = 400.0, cycleId
+  (allocDE, _) <- submit subDE do exerciseCmd depDE Allocate with operator, allocAmount = 200.0, cycleId
+
+  -- (A) The operator CANNOT settle without supplying the on-ledger approvals — even though the
+  --     cash legs are perfectly funded. No approvals => no settlement.
+  batchNoApprovals <- submit operator do
+    createCmd SettlementBatch with
+      operator; regulator; cycleId
+      transfers = [(allocUS, subUK, 400.0), (allocDE, subUK, 200.0)]
+      payouts = [(subUK, 600.0)]
+      cycle = Some cycleLocked
+      approvals = None
+  submitMustFail operator do exerciseCmd batchNoApprovals ExecuteSettlement
+
+  -- (B) The operator CANNOT pay out more than the approved position: fabricating UK's payout as
+  --     700 (approved is +600) is rejected before any cash moves. No inflating beyond consent.
+  batchFabricated <- submit operator do
+    createCmd SettlementBatch with
+      operator; regulator; cycleId
+      transfers = [(allocUS, subUK, 400.0), (allocDE, subUK, 200.0)]
+      payouts = [(subUK, 700.0)]
+      cycle = Some cycleLocked
+      approvals = Some [apUS, apUK, apDE]
+  submitMustFail operator do exerciseCmd batchFabricated ExecuteSettlement
+
+  -- (C) The honest batch — exactly the approved positions — settles. Proves the gate lets the
+  --     legitimate settlement through (so A/B fail for the right reason, not incidentally).
+  batchOk <- submit operator do
+    createCmd SettlementBatch with
+      operator; regulator; cycleId
+      transfers = [(allocUS, subUK, 400.0), (allocDE, subUK, 200.0)]
+      payouts = [(subUK, 600.0)]
+      cycle = Some cycleLocked
+      approvals = Some [apUS, apUK, apDE]
+  _ <- submit operator do exerciseCmd batchOk ExecuteSettlement
+
+  pure ()

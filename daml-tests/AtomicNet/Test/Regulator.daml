@@ -1,6 +1,6 @@
 -- REGULATOR selective disclosure: the regulator is an explicit observer on the cycle, net
--- positions, approvals, and settlement, so it reconstructs the full audit trail -- WITHOUT
--- subsidiaries having to expose anything to each other. Siblings stay blind.
+-- positions, approvals, and settlement, so it reconstructs the netting & settlement trail --
+-- WITHOUT subsidiaries having to expose anything to each other. Siblings stay blind.
 module AtomicNet.Test.Regulator where
 
 import AtomicNet.Types
@@ -63,6 +63,8 @@ regulatorDisclosure = script do
       cycleId = "C"
       transfers = [(allocDE, subUK, 50.0)]
       payouts = [(subUK, 50.0)]
+      cycle = None        -- this test only checks the regulator can SEE the batch, not execute it
+      approvals = None
 
   -- The regulator also sees the cycle and the settlement batch (full audit trail)...
   rCycle <- queryContractId regulator cycle

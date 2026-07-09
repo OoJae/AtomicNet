@@ -1,35 +1,51 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, signed, type CycleView } from "../api";
 import { useAsync } from "../useApi";
 import { AgentPanel } from "./AgentPanel";
 import { ErrorBanner } from "./ErrorBanner";
 
-export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleId?: string; setCycleId: (id: string) => void; refresh: number; bump: () => void }) {
+export function OperatorConsole({ cycleId, setCycleId, refresh, bump, readOnly }: { cycleId?: string; setCycleId: (id: string) => void; refresh: number; bump: () => void; readOnly: boolean }) {
   const { data: cycle } = useAsync<CycleView | undefined>(() => (cycleId ? api.cycle(cycleId) : Promise.resolve(undefined)), [cycleId, refresh]);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string>();
   const [err, setErr] = useState<string>();
+  const busy = busyAction !== undefined;
 
-  async function run<T>(p: Promise<T>): Promise<T | undefined> {
-    setBusy(true);
+  // While a long op runs (a DevNet cycle is ~minutes of ledger round-trips), poll so the
+  // console fills in incrementally — adopting the server's cycle id the moment it opens — so
+  // the run never reads as frozen.
+  useEffect(() => {
+    if (!busy) return;
+    const iv = setInterval(async () => {
+      try {
+        const g = await api.graph();
+        if (g.activeCycleId && g.activeCycleId !== cycleId) setCycleId(g.activeCycleId);
+      } catch {
+        /* transient — keep polling */
+      }
+      bump();
+    }, 3500);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, cycleId]);
+
+  async function run<T>(action: string, p: Promise<T>): Promise<T | undefined> {
+    setBusyAction(action);
     setErr(undefined);
     try {
       return await p;
     } catch (e) {
       setErr(String((e as Error)?.message ?? e));
     } finally {
-      setBusy(false);
+      setBusyAction(undefined);
       bump();
     }
   }
-  async function openCycle() {
-    const id = `CYCLE-${Date.now()}`;
-    await run(api.openCycle({ cycleId: id }));
-    setCycleId(id);
-  }
   async function demo() {
-    const r = await run(api.runDemo());
+    const r = await run("demo", api.runDemo());
     if (r) setCycleId(r.cycleId);
   }
+
+  const settled = cycle?.status === "Settled";
 
   return (
     <div className="stack">
@@ -43,7 +59,7 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleI
           <div className="metric" style={{ textAlign: "right", alignItems: "flex-end" }}>
             <span className="k">Cycle status</span>
             {cycle ? <span className={"chip " + (cycle.status || "").toLowerCase()}>{cycle.status}</span> : <span className="note">no active cycle</span>}
-            <span className="note mono">{cycleId ?? "open a cycle to begin"}</span>
+            <span className="note mono">{cycleId ?? "run the demo to begin"}</span>
           </div>
         </div>
       </div>
@@ -52,16 +68,25 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleI
         <div className="card-h">
           <h3>Cycle controls</h3>
           <div className="row" style={{ marginLeft: "auto", gap: 8 }}>
-            <button className="btn sm" onClick={openCycle} disabled={busy}>Open new cycle</button>
-            <button className="btn sm" onClick={() => cycleId && run(api.lockCycle(cycleId))} disabled={!cycleId || busy}>Lock &amp; compute nets</button>
-            <button className="btn primary sm" onClick={() => cycleId && run(api.settle(cycleId))} disabled={!cycle?.allApproved || busy} title={cycle?.allApproved ? "" : "every subsidiary must approve & allocate first"}>Execute settlement</button>
-            <button className="btn sm" onClick={demo} disabled={busy}>▷ Run full demo cycle</button>
+            <button className="btn sm" disabled title="Manual invoice entry isn’t wired in this demo — use ▷ Run full demo cycle">Open new cycle</button>
+            <button className="btn sm" disabled title="Manual invoice entry isn’t wired in this demo — use ▷ Run full demo cycle">Lock &amp; compute nets</button>
+            <button
+              className="btn primary sm"
+              onClick={() => cycleId && run("settle", api.settle(cycleId))}
+              disabled={readOnly || !cycle?.allApproved || settled || busy}
+              title={readOnly ? "read-only deployment" : settled ? "this cycle is already settled" : cycle?.allApproved ? "" : "every subsidiary must approve & allocate first"}
+            >
+              {busyAction === "settle" ? "Settling…" : "Execute settlement"}
+            </button>
+            <button className="btn sm" onClick={demo} disabled={readOnly || busy} title={readOnly ? "read-only deployment" : ""}>
+              {busyAction === "demo" ? "Running full cycle…" : "▷ Run full demo cycle"}
+            </button>
           </div>
         </div>
         <table>
           <thead><tr><th>Subsidiary</th><th className="r">Net position</th><th>On-ledger approval</th></tr></thead>
           <tbody>
-            {(!cycle || cycle.positions.length === 0) && <tr><td colSpan={3} className="empty">No net positions yet — click <b>▷ Run full demo cycle</b> to raise 20 invoices across 3 currencies and watch them net down to 3 payments.</td></tr>}
+            {(!cycle || cycle.positions.length === 0) && <tr><td colSpan={3} className="empty">{busy ? "Raising invoices and computing nets…" : <>No net positions yet — click <b>▷ Run full demo cycle</b> to raise 20 invoices across 3 currencies and watch them net down to 3 payments.</>}</td></tr>}
             {(cycle?.positions ?? []).map((p) => (
               <tr key={p.subsidiary}>
                 <td>{p.subsidiary}</td>
@@ -74,9 +99,12 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleI
         {cycle && cycle.positions.length > 0 && !cycle.allApproved && (
           <div className="card-b"><div className="note">Execute is disabled until every subsidiary approves &amp; allocates (switch the “Acting as” party to a subsidiary to do so).</div></div>
         )}
+        {settled && (
+          <div className="card-b"><div className="note">✓ This cycle is settled on-ledger — balances moved atomically in one transaction.</div></div>
+        )}
       </div>
 
-      <AgentPanel onApprove={openCycle} />
+      <AgentPanel onApprove={demo} readOnly={readOnly} />
     </div>
   );
 }
