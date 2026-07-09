@@ -18,8 +18,11 @@ const num = (s: string) => parseFloat(s);
 // allocates "Sub_US" as on-ledger hint "atomicnet-sub-us" while the app and UI keep the
 // friendly names. Unset (default) keeps the plain hints for local/sandbox deployments.
 const HINT_PREFIX = process.env.PARTY_HINT_PREFIX ?? "";
+const HINT_SUFFIX = process.env.PARTY_HINT_SUFFIX ?? ""; // e.g. "-1" per the org's convention
 const hintOf = (name: string): string =>
-  HINT_PREFIX ? `${HINT_PREFIX}${name.toLowerCase().replace(/_/g, "-")}` : name;
+  HINT_PREFIX || HINT_SUFFIX
+    ? `${HINT_PREFIX}${name.toLowerCase().replace(/_/g, "-")}${HINT_SUFFIX}`
+    : name;
 
 // The cycle currently being worked/demoed; views scope to it so re-runs stay clean.
 let activeCycleId: string | undefined;

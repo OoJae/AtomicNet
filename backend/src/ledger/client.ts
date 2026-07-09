@@ -5,7 +5,38 @@
 // IP/localhost; set LEDGER_API_TOKEN if the validator runs with auth enabled, `-a`).
 const JSON_API = process.env.JSON_API_URL ?? "http://localhost:7575";
 const HOST_HEADER = process.env.JSON_API_HOST_HEADER; // e.g. json-ledger-api.localhost
-const TOKEN = process.env.LEDGER_API_TOKEN; // Bearer token (only if auth is enabled)
+const TOKEN = process.env.LEDGER_API_TOKEN; // static Bearer token (only if auth is enabled)
+
+// OAuth2 client-credentials (e.g. 5N Seaport / shared DevNet validator: tokens expire ~8h,
+// so we fetch and auto-refresh instead of relying on a static token). Takes precedence over
+// LEDGER_API_TOKEN when configured.
+const OAUTH_URL = process.env.LEDGER_OAUTH_TOKEN_URL; // e.g. https://auth.../oauth/token
+const OAUTH_ID = process.env.LEDGER_OAUTH_CLIENT_ID;
+const OAUTH_SECRET = process.env.LEDGER_OAUTH_CLIENT_SECRET;
+const OAUTH_SCOPE = process.env.LEDGER_OAUTH_SCOPE ?? "daml_ledger_api";
+
+let cachedToken: { token: string; expiresAt: number } | undefined;
+async function bearer(): Promise<string | undefined> {
+  if (!OAUTH_URL || !OAUTH_ID || !OAUTH_SECRET) return TOKEN;
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) return cachedToken.token;
+  const res = await fetch(OAUTH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: OAUTH_ID,
+      client_secret: OAUTH_SECRET,
+      scope: OAUTH_SCOPE,
+    }),
+  });
+  if (!res.ok) throw new Error(`oauth token fetch failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const data: any = await res.json();
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (Number(data.expires_in ?? 3600) * 1000),
+  };
+  return cachedToken.token;
+}
 
 export interface CreateCommand {
   CreateCommand: { templateId: string; createArguments: Record<string, unknown> };
@@ -29,12 +60,13 @@ export interface Contract {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const tok = await bearer();
   const res = await fetch(JSON_API + path, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       ...(HOST_HEADER ? { Host: HOST_HEADER } : {}),
-      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
