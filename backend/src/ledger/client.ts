@@ -14,6 +14,7 @@ const OAUTH_URL = process.env.LEDGER_OAUTH_TOKEN_URL; // e.g. https://auth.../oa
 const OAUTH_ID = process.env.LEDGER_OAUTH_CLIENT_ID;
 const OAUTH_SECRET = process.env.LEDGER_OAUTH_CLIENT_SECRET;
 const OAUTH_SCOPE = process.env.LEDGER_OAUTH_SCOPE ?? "daml_ledger_api";
+const OAUTH_AUDIENCE = process.env.LEDGER_OAUTH_AUDIENCE; // some IdPs require an audience claim
 
 let cachedToken: { token: string; expiresAt: number } | undefined;
 async function bearer(): Promise<string | undefined> {
@@ -27,6 +28,7 @@ async function bearer(): Promise<string | undefined> {
       client_id: OAUTH_ID,
       client_secret: OAUTH_SECRET,
       scope: OAUTH_SCOPE,
+      ...(OAUTH_AUDIENCE ? { audience: OAUTH_AUDIENCE } : {}),
     }),
   });
   if (!res.ok) throw new Error(`oauth token fetch failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
@@ -97,10 +99,35 @@ export async function allocateParty(hint: string): Promise<string> {
   return (Array.isArray(pd) ? pd[0] : pd).party;
 }
 
-/** Allocate a party with this hint, or reuse an existing one (idempotent across restarts). */
+/** Allocate a party with this hint, or reuse the existing one (idempotent across restarts).
+ *  Allocate-first: on a shared participant the party list can hold thousands of entries
+ *  (paginated), so we try to allocate and, if the party already exists, recover its full id
+ *  from the error message — falling back to a paged search. */
 export async function allocateOrReuse(hint: string): Promise<string> {
-  const existing = (await listParties()).find((p) => p.startsWith(hint + "::"));
-  return existing ?? (await allocateParty(hint));
+  try {
+    return await allocateParty(hint);
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e);
+    if (!/already exists/i.test(msg)) throw e;
+    // Fast path: on a shared participant the namespace is fixed and known — construct the id.
+    if (process.env.PARTY_NAMESPACE) return `${hint}::${process.env.PARTY_NAMESPACE}`;
+    // The error message may TRUNCATE the party id — only trust a full-length namespace
+    // (fingerprints are "1220" + 64 hex chars); otherwise fall back to the paged search
+    // (slow on shared participants with many thousands of parties).
+    const esc = hint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = msg.match(new RegExp(`${esc}::1220[0-9a-fA-F]{64}`));
+    if (m) return m[0];
+    let pageToken = "";
+    do {
+      const r = await api<{ partyDetails?: any[]; nextPageToken?: string }>(
+        `/v2/parties?pageSize=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`,
+      );
+      const hit = (r.partyDetails ?? []).map((p: any) => p.party).find((p: string) => p.startsWith(hint + "::"));
+      if (hit) return hit;
+      pageToken = r.nextPageToken ?? "";
+    } while (pageToken);
+    throw e;
+  }
 }
 
 export interface SubmitResult {
@@ -111,7 +138,9 @@ export async function submit(actAs: string[], commands: Command[]): Promise<Subm
   return api<SubmitResult>("/v2/commands/submit-and-wait", {
     method: "POST",
     body: JSON.stringify({
-      userId: "atomicnet-backend",
+      // With auth enabled, userId must match the token's ledger user (e.g. "6" on the
+      // shared hackathon validator); any label works on a no-auth local sandbox.
+      userId: process.env.LEDGER_USER_ID ?? "atomicnet-backend",
       commandId: `cmd-${Date.now()}-${Math.floor(Math.random() * 1e9)}`,
       actAs,
       readAs: [],

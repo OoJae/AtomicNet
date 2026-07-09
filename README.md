@@ -90,17 +90,27 @@ Or the single-container way (exactly what the live demo runs):
 docker build -t atomicnet . && docker run -p 8080:8080 -e SEED_DEMO=1 atomicnet
 ```
 
-## Canton Network DevNet
+## ✅ Deployed on Canton DevNet
 
-The hosted demo runs a self-contained Canton sandbox (stable, resets on redeploy). AtomicNet is
-also **DevNet-ready**: [deploy/devnet/](deploy/devnet/) contains the full runbook + scripts to run
-it against the **real Canton Network** via a Splice validator node (self-service DevNet onboarding,
-DAR upload, party allocation in our validator's namespace, backend env wiring). The compatibility
-risks are already eliminated locally: the SDK 3.4.11 DAR and the package-name-only client ran the
-complete 20→3 cycle green against **Canton 3.5.1** — the same line DevNet runs. The one external
-prerequisite is the SV egress-IP allowlist (a 2–7 day process; requested via the hackathon
-sponsors). The DevNet validator is a run-on-demand deployment — DevNet itself is reset quarterly —
-so the always-on public link stays on the sandbox, clearly labeled.
+**AtomicNet runs on the real Canton Network.** The DAR is deployed to the hackathon's shared
+DevNet validator (Canton 3.5.7), our 8 parties live under its namespace, and the full
+**20 → 3 atomic netting cycle has settled on-ledger** (2026-07-09):
+
+- Parties: `atomicnet-operator-1`, `atomicnet-sub-{us,uk,de,fr,sg}-1`, `atomicnet-bank-1`,
+  `atomicnet-regulator-1` — all under namespace `1220a14ca128…b14e5acf8`
+- First contract: update `122014778b13dc35d3c6709457cf5b59ecc70778f442c6b8d68abda34e9cf3539391`
+  (offset 4,141,881); full demo cycle `CYCLE-1783610967426` — 20 invoices → 3 net payments,
+  balances = opening ± net, Sub_SG nets to zero, and Sub_UK's ledger view shows only its own
+  8 invoices (privacy enforced by the network itself)
+
+Run it against DevNet: create `.env.devnet` with the hackathon validator's endpoint + OIDC
+client credentials (see the pinned access PDF in the hackathon Discord) plus
+`PARTY_HINT_PREFIX=atomicnet- PARTY_HINT_SUFFIX=-1 PARTY_NAMESPACE=<shared namespace>
+LEDGER_USER_ID=<token user>`, then
+`node --env-file=../.env.devnet src/api/server.ts` — the same app, pointed at the real network.
+The always-on public demo link stays on the self-contained sandbox (DevNet is a shared,
+quarterly-reset environment); [deploy/devnet/](deploy/devnet/) documents both this shared-validator
+path and the self-run Splice validator path.
 
 ## Honest scope (MVP vs production)
 
