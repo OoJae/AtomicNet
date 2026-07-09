@@ -1,41 +1,111 @@
 # AtomicNet
 
+[![CI](https://github.com/OoJae/AtomicNet/actions/workflows/ci.yml/badge.svg)](https://github.com/OoJae/AtomicNet/actions/workflows/ci.yml)
+
 **Private, atomic, cross-currency intercompany settlement on Canton — with an AI treasury agent that proposes but never settles.**
 
-AtomicNet lets the subsidiaries of a multinational settle their intercompany invoices by *netting* — collapsing a tangled web of gross cross-currency payments into one net payment per entity — where (a) no subsidiary can see another's bilateral balances, and (b) the multi-currency net settlement executes **atomically** against tokenized bank deposits. It showcases the two things Canton does that Ethereum cannot do at once: **sub-transaction privacy** and **atomic multi-party settlement**.
+AtomicNet lets the subsidiaries of a multinational settle their intercompany invoices by *netting* — collapsing a tangled web of gross cross-currency payments into one net payment per entity — where (a) no subsidiary can see another's bilateral balances, and (b) the net settlement executes **atomically** against tokenized bank deposits. In the demo dataset, **20 gross invoices across 3 currencies collapse into 3 net payments**, and one entity (Sub_SG) nets to exactly zero — it owed as much as it was owed, so **no money moves for it at all**.
 
-> Hackathon project — Build on Canton (Encode Club × Canton Foundation, 2026). MVP scope: 3–5 subsidiaries, 1 operator, 1 bank, 1 regulator; 2–3 currencies; hosted demo environment (not mainnet).
+> Hackathon project — Build on Canton (Encode Club × Canton Foundation, 2026). MVP scope: 5 subsidiaries, 1 operator, 1 bank, 1 regulator; 3 currencies; hosted demo environment (not mainnet).
 
-**🌐 Live demo: https://atomicnet-production.up.railway.app** — a real Canton sandbox ledger + the full app in one container (demo environment; resets on redeploy). Try: Operator → *Run full demo cycle* · **Network** tab → toggle *Gross web ↔ Net settlement* · switch *Acting as* → **Sub_UK** → **Privacy Proof** (the US↔DE invoice is hidden by the ledger).
+**🌐 Live demo: https://atomicnet-production.up.railway.app** — a real Canton ledger + the full app in one container (demo environment; in-memory ledger, reseeds on restart).
+Try, in order: **Operator** → *▷ Run full demo cycle* → **Network** tab → toggle *Gross web ↔ Net settlement* → switch *Acting as* → **UK** → **Privacy Proof** (most invoices are simply *not there* — hidden by the ledger, not the app) → **Regulator** (sees everything).
 
-## Status
-- ✅ **Stage 0** — toolchain + atomic-settlement/privacy gate proven. See [docs/STAGE0.md](docs/STAGE0.md).
-- ✅ **Stage 1** — Daml core (Invoice propose/accept, Cycle, NetPosition → ApprovedNetPosition) + happy-path lifecycle test.
-- ✅ **Stage 2** — tokenized cash (Deposit / DepositAllocation) + atomic single-currency settlement; `settlement` + `atomicity` tests green.
-- ✅ **Stage 3** — multi-currency FX netting → atomic USD settlement; TypeScript netting service; full Daml test suite. **7 Daml scripts + 8 netting tests green.**
-- ✅ **Stage 4** — full-stack app: Node/TS backend (JSON Ledger API bridge, reads AS the party), React+Vite institutional frontend (party switcher, Gross→Net viz, live privacy proof, regulator view), and a human-in-the-loop AI treasury agent (MiMo v2.5 Pro) that proposes but cannot settle.
-- ⬜ Stage 5 — demo dataset, polish, hosted demo, CI
+## Why this is impossible anywhere but Canton
 
-## What the tests prove
-Each Daml Script in [daml-tests/](daml-tests/AtomicNet/Test/) demonstrates a guarantee a judge cares about (`dpm test`, all green):
+Multilateral netting needs two properties **simultaneously**:
+
+1. **Confidentiality between participants.** Subsidiary B must not see the A↔C invoice flow. On a transparent chain (Ethereum & co.) the whole netting graph is public. On Canton, a party learns of a contract *only* if it is a signatory, observer, or controller — there is no global broadcast. We never filter data in the app; we query the ledger **as the logged-in party** and the protocol does the rest.
+2. **Atomic multi-party settlement.** All net legs settle in ONE transaction or none do — otherwise you've created financial exposure. Privacy-focused chains give up this cross-party atomic composition; Canton's synchronizer commits the whole settlement all-or-nothing.
+
+Public chains give you 2 without 1. Privacy chains give you 1 without 2. Intercompany netting needs both — that's the whole product.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    FE["React + Vite frontend<br/>party switcher · Gross→Net viz<br/>privacy proof · regulator view"]
+  end
+  subgraph Backend["Node/TS backend (Hono)"]
+    API["REST bridge<br/>reads AS the party — no privacy logic in the app"]
+    NET["netting service<br/>FX-convert once · Σ net == 0 · settlement plan"]
+    AGENT["AI treasury agent (MiMo v2.5 Pro)<br/>proposes only — NO code path to settlement"]
+  end
+  subgraph Canton["Canton ledger (Daml 3.x)"]
+    M["IntercompanyInvoice (propose/accept)<br/>NettingCycle · NetPosition→ApprovedNetPosition<br/>Deposit · DepositAllocation (bank+owner co-signed)<br/>SettlementBatch.ExecuteSettlement (atomic)"]
+  end
+  FE -->|HTTP JSON| API
+  API -->|JSON Ledger API v2<br/>actAs = the party| M
+  API --> NET
+  FE -.->|"Approve & propose (human gate)"| AGENT
+  AGENT -.->|proposal + rationale only| FE
+```
+
+**The settlement mechanic (why it's atomic *and* authorized):** each net payer pre-authorizes by earmarking funds into a `DepositAllocation` **co-signed by payer + bank** — one allocation per planned payment instruction. The operator's `ExecuteSettlement` consumes every allocation and pays every receiver in ONE transaction; each nested `Disburse` surfaces that allocation's co-signature, so the operator never needs re-authorization at settle time. The choice itself re-checks per-receiver totals and total conservation — any shortfall reverts everything. And the AI agent? It returns a *suggestion object* that can only pre-fill the cycle form; settlement still requires every subsidiary's on-ledger `ApproveNetPosition` **and** a human clicking Execute.
+
+## What our tests prove
+
+Every guarantee a judge should care about is a runnable test, not a claim.
+
+**Daml Scripts** ([daml-tests/AtomicNet/Test/](daml-tests/AtomicNet/Test/), run `dpm test`):
 
 | Test | Proves |
 |---|---|
 | `lifecycle` | The full invoice → cycle → net-position → approval flow works end to end. |
 | `settlement` | Net payers reserve funds; the operator settles every leg in ONE transaction; balances = opening ± net, cash conserved. |
 | `atomicity` | One under-funded leg → the **entire** settlement reverts, no balances change. *No partial settlement, no exposure.* |
-| `multiCurrencySettlement` | Invoices in USD/EUR/GBP FX-net to USD (Σ = 0) and settle atomically. |
+| `multiCurrencySettlement` | Invoices in USD/EUR/GBP FX-net to USD (Σ = 0, exactly) and settle atomically. |
 | `privacy` | A sibling cannot see another pair's invoice or another sub's net position — privacy by protocol, not by app. |
-| `authorization` | No party can forge an invoice that binds another; no subsidiary can trigger settlement or approve another's position. |
-| `regulatorDisclosure` | The regulator reconstructs the full audit trail (cycle, positions, approvals, settlement); siblings stay blind to each other. |
+| `authorization` | No party can forge an invoice binding another; no subsidiary can trigger settlement or approve another's position. |
+| `regulatorDisclosure` | The regulator reconstructs the full audit trail; siblings stay blind to each other. Selective disclosure without broadcast. |
 
-The [TypeScript netting service](backend/src/netting/) (`pnpm test`, 8 tests) converts multi-currency invoices, computes each entity's net position, asserts Σ net == 0 (rejecting tampered books), builds the settlement plan, and reports the gross→net reduction ratio.
+**Backend tests** ([backend/src/](backend/src/), run `pnpm test` — zero runtime deps, Node's built-in runner):
 
-## Tech
-Daml 3.x / Canton 3.x (via DPM) · Daml Script tests · Node/TypeScript backend on the JSON Ledger API · React + Vite frontend · Anthropic API for the treasury agent.
+| Test | Proves |
+|---|---|
+| `netting.test.ts` | FX conversion, Σ net == 0 (tampered books rejected), plan routing, reduction ratio. |
+| `demoData.test.ts` | The demo dataset genuinely nets **20 → 3** with Sub_SG at exactly zero — via the real netting code, not hand-waving. |
+| `agent.guardrail.test.ts` | The agent module has **no code path to settlement** (imports nothing from the ledger/settle path). |
 
-## Develop
-See [CLAUDE.md](CLAUDE.md) for the verified toolchain, commands, and the project's inviolable rules.
+## Run it locally
+
+Prereqs: JDK 17+ ([OpenJDK 21](https://formulae.brew.sh/formula/openjdk@21)), [DPM](https://docs.digitalasset.com/) (`curl https://get.digitalasset.com/install/install.sh | sh`), Node 22+, pnpm.
+
+```bash
+dpm install 3.4.11
+dpm build --all                                   # model + test DARs
+( cd daml-tests && dpm test )                     # the proof suite
+
+# live app (3 terminals, or use Docker below)
+dpm sandbox --json-api-port 7575 --dar daml/.daml/dist/atomicnet-model-0.1.0.dar
+cp .env.example .env                              # add your agent API key (optional)
+cd backend  && pnpm install && SEED_DEMO=1 node --env-file=../.env src/api/server.ts
+cd frontend && npm install  && npm run dev        # → http://localhost:5173
+```
+
+Or the single-container way (exactly what the live demo runs):
+
+```bash
+docker build -t atomicnet . && docker run -p 8080:8080 -e SEED_DEMO=1 atomicnet
+```
+
+## Honest scope (MVP vs production)
+
+- **Real:** the Daml authorization/privacy model, atomic settlement, the FX netting math, the live ledger the demo runs on, the agent guardrails.
+- **Simulated / simplified:** the bank and its tokenized deposits are hand-rolled (`Deposit`/`DepositAllocation`) rather than the Canton token standard — deliberately the same allocation→atomic-disburse shape, so swapping in standard holdings/allocations is future work, not a redesign. FX rates are fixed per cycle (no live feed). Party auth is a demo switcher, not wallet auth. In-memory ledger (resets on restart). No production KYC/tax/transfer-pricing logic.
+
+## Repo layout
+
+```
+daml/               AtomicNet.* model (Invoice, Cycle, NetPosition, Cash, Settlement, Fx)
+daml-tests/         the Daml Script proof suite
+backend/            Node/TS: JSON Ledger API bridge · netting service · AI agent · REST
+frontend/           React + Vite institutional UI
+deploy/ Dockerfile  single-container deploy (Canton sandbox + backend + frontend)
+docs/               stage notes and planning
+```
 
 ## License
+
 Apache-2.0 — see [LICENSE](LICENSE).

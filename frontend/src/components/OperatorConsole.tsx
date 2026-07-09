@@ -2,17 +2,20 @@ import { useState } from "react";
 import { api, signed, type CycleView } from "../api";
 import { useAsync } from "../useApi";
 import { AgentPanel } from "./AgentPanel";
+import { ErrorBanner } from "./ErrorBanner";
 
 export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleId?: string; setCycleId: (id: string) => void; refresh: number; bump: () => void }) {
   const { data: cycle } = useAsync<CycleView | undefined>(() => (cycleId ? api.cycle(cycleId) : Promise.resolve(undefined)), [cycleId, refresh]);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>();
 
   async function run<T>(p: Promise<T>): Promise<T | undefined> {
     setBusy(true);
+    setErr(undefined);
     try {
       return await p;
     } catch (e) {
-      alert(String((e as Error)?.message ?? e));
+      setErr(String((e as Error)?.message ?? e));
     } finally {
       setBusy(false);
       bump();
@@ -30,6 +33,7 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleI
 
   return (
     <div className="stack">
+      <ErrorBanner message={err} onDismiss={() => setErr(undefined)} />
       <div className="card">
         <div className="card-b spread">
           <div className="metric">
@@ -57,7 +61,7 @@ export function OperatorConsole({ cycleId, setCycleId, refresh, bump }: { cycleI
         <table>
           <thead><tr><th>Subsidiary</th><th className="r">Net position</th><th>On-ledger approval</th></tr></thead>
           <tbody>
-            {(!cycle || cycle.positions.length === 0) && <tr><td colSpan={3} className="empty">No net positions yet — open a cycle, raise invoices, then lock. Or click “Run full demo cycle”.</td></tr>}
+            {(!cycle || cycle.positions.length === 0) && <tr><td colSpan={3} className="empty">No net positions yet — click <b>▷ Run full demo cycle</b> to raise 20 invoices across 3 currencies and watch them net down to 3 payments.</td></tr>}
             {(cycle?.positions ?? []).map((p) => (
               <tr key={p.subsidiary}>
                 <td>{p.subsidiary}</td>

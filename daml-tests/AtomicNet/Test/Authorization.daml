@@ -31,7 +31,7 @@ authorization = script do
       currency = "USD"
       invoiceId = "FORGED"
       dueDate = date 2026 Jun 20
-      included = False
+      cycleId = None
 
   -- (2) A subsidiary cannot approve ANOTHER sub's net position (ApproveNetPosition is
   --     controlled by that subsidiary; Sub_US is neither controller nor an observer of it).

@@ -26,7 +26,7 @@ template InvoiceProposal
       controller payer
       do create IntercompanyInvoice with
            operator; issuer; payer; amount; currency; invoiceId; dueDate
-           included = False
+           cycleId = None
 
     choice RejectInvoice : ()
       controller payer
@@ -43,19 +43,20 @@ template IntercompanyInvoice
     currency  : CurrencyCode
     invoiceId : Text
     dueDate   : Date
-    included  : Bool         -- has this been locked into a netting cycle?
+    cycleId   : Optional Text  -- None = not yet locked into a netting cycle
   where
     signatory issuer, payer  -- both are bound by, and both see, the obligation
     observer  operator       -- operator nets over it; siblings are on NEITHER set -> blind
     ensure amount > 0.0
 
-    -- Operator locks the invoice into a cycle. Consuming recreate: the authority available
+    -- Operator locks the invoice into a cycle, RECORDING which cycle claimed it (so an
+    -- invoice can never be netted twice). Consuming recreate: the authority available
     -- inside the choice is {operator} (controller) u {issuer, payer} (signatories of the
     -- exercised contract), which covers the recreated invoice's signatories.
-    -- Stage-2 refactor to consider: have the NettingCycle reference included invoice cids
-    -- as the single source of truth, instead of mutating this `included` flag.
     choice IncludeInCycle : ContractId IntercompanyInvoice
       with
-        cycleId : Text       -- the cycle this invoice is being locked into
+        inCycleId : Text     -- the cycle this invoice is being locked into
       controller operator
-      do create this with included = True
+      do
+        assertMsg "invoice already included in a cycle" (cycleId == None)
+        create this with cycleId = Some inCycleId

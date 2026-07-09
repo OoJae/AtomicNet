@@ -57,9 +57,9 @@ multiCurrencySettlement = script do
       status = Open
 
   -- Lock the invoices into the cycle, then lock the cycle.
-  _ <- submit operator do exerciseCmd invUkUs IncludeInCycle with cycleId
-  _ <- submit operator do exerciseCmd invUsDe IncludeInCycle with cycleId
-  _ <- submit operator do exerciseCmd invDeUk IncludeInCycle with cycleId
+  _ <- submit operator do exerciseCmd invUkUs IncludeInCycle with inCycleId = cycleId
+  _ <- submit operator do exerciseCmd invUsDe IncludeInCycle with inCycleId = cycleId
+  _ <- submit operator do exerciseCmd invDeUk IncludeInCycle with inCycleId = cycleId
   _ <- submit operator do exerciseCmd cycleOpen LockCycle
 
   -- Net positions in USD, each invoice converted exactly once via FX.

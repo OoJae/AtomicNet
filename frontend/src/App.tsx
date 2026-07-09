@@ -8,8 +8,8 @@ import { PrivacyProof } from "./components/PrivacyProof";
 import { RegulatorView } from "./components/RegulatorView";
 
 const ROLE: Record<string, string> = {
-  Operator: "Netting center", Sub_US: "Subsidiary", Sub_UK: "Subsidiary",
-  Sub_DE: "Subsidiary", Bank: "Cash registry", Regulator: "Observer",
+  Operator: "Netting center", Sub_US: "Subsidiary", Sub_UK: "Subsidiary", Sub_DE: "Subsidiary",
+  Sub_FR: "Subsidiary", Sub_SG: "Subsidiary", Bank: "Cash registry", Regulator: "Observer",
 };
 type Tab = "console" | "network" | "privacy";
 
@@ -29,8 +29,8 @@ export function App() {
           <span className="lbl">Acting as</span>
           <div className="seg">
             {(parties.data ?? []).map((p) => (
-              <button key={p.name} className={party === p.name ? "on" : ""} onClick={() => setParty(p.name)}>
-                {p.name}<span className="role">{ROLE[p.name]}</span>
+              <button key={p.name} className={party === p.name ? "on" : ""} onClick={() => setParty(p.name)} title={p.name}>
+                {p.name.replace("Sub_", "")}<span className="role">{ROLE[p.name] ?? "Party"}</span>
               </button>
             ))}
           </div>

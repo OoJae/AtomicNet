@@ -54,13 +54,13 @@ if (dist) {
 const port = Number(process.env.PORT ?? 8080);
 console.log("AtomicNet backend: bootstrapping ledger (allocating parties, seeding deposits)...");
 await svc.bootstrap();
-if (process.env.SEED_DEMO === "1") {
-  try {
-    const r = await svc.runDemo();
-    console.log("seeded demo cycle:", r.cycleId, r.balances);
-  } catch (e) {
-    console.error("demo seed failed (non-fatal):", (e as Error)?.message ?? e);
-  }
-}
 console.log(`AtomicNet backend listening on :${port}` + (dist ? " (serving frontend + API)" : ""));
 serve({ fetch: app.fetch, port });
+// Seed the 20-invoice demo cycle AFTER the server is up (it's ~70 ledger commands);
+// the UI fills in live as the seed progresses.
+if (process.env.SEED_DEMO === "1") {
+  svc
+    .runDemo()
+    .then((r) => console.log("seeded demo cycle:", r.cycleId, "reduction", r.reduction, r.balances))
+    .catch((e) => console.error("demo seed failed (non-fatal):", (e as Error)?.message ?? e));
+}

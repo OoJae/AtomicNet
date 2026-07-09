@@ -1,24 +1,29 @@
+import { useState } from "react";
 import { api, fmt, signed, type Dashboard } from "../api";
 import { useAsync } from "../useApi";
+import { ErrorBanner } from "./ErrorBanner";
 
 export function SubsidiaryDashboard({ party, cycleId, refresh, bump }: { party: string; cycleId?: string; refresh: number; bump: () => void }) {
   const { data, error, loading } = useAsync<Dashboard>(() => api.dashboard(party), [party, refresh]);
-  if (loading) return <div className="empty">Loading…</div>;
+  const [err, setErr] = useState<string>();
+  if (loading) return <div className="empty">Loading {party}’s ledger view…</div>;
   if (error) return <div className="empty">Error: {error}</div>;
   if (!data) return null;
   const myNet = data.netPositions.find((n) => n.cycleId === cycleId) ?? data.netPositions[data.netPositions.length - 1];
 
   const act = async (p: Promise<unknown>) => {
+    setErr(undefined);
     try {
       await p;
     } catch (e) {
-      alert(String((e as Error)?.message ?? e));
+      setErr(String((e as Error)?.message ?? e));
     }
     bump();
   };
 
   return (
     <div className="stack">
+      <ErrorBanner message={err} onDismiss={() => setErr(undefined)} />
       <div className="grid c3">
         {Object.keys(data.balances).length === 0 && (
           <div className="card"><div className="card-b empty">No deposits</div></div>
@@ -42,7 +47,7 @@ export function SubsidiaryDashboard({ party, cycleId, refresh, bump }: { party: 
               </div>
               <div className="row" style={{ gap: 8 }}>
                 {myNet.status === "pending" && <button className="btn primary sm" onClick={() => act(api.approve(party, myNet.cycleId))}>Approve net position</button>}
-                {myNet.status === "approved" && myNet.netAmount < 0 && <button className="btn sm" onClick={() => act(api.allocate(party, myNet.cycleId))}>Allocate {fmt(-myNet.netAmount)} to settle</button>}
+                {myNet.status === "approved" && myNet.netAmount < 0 && <button className="btn sm" onClick={() => act(api.allocate(party, myNet.cycleId))}>Reserve {fmt(-myNet.netAmount)} to settle</button>}
                 {myNet.status === "approved" && myNet.netAmount >= 0 && <span className="chip approved">approved · awaiting settlement</span>}
               </div>
             </div>

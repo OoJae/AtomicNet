@@ -52,9 +52,9 @@ lifecycle = script do
       status = Open
 
   -- 5. Operator locks the three invoices into the cycle.
-  _invUkUs' <- submit operator do exerciseCmd invUkUs IncludeInCycle with cycleId = "CYCLE-2026-06"
-  _invUsDe' <- submit operator do exerciseCmd invUsDe IncludeInCycle with cycleId = "CYCLE-2026-06"
-  _invDeUk' <- submit operator do exerciseCmd invDeUk IncludeInCycle with cycleId = "CYCLE-2026-06"
+  _invUkUs' <- submit operator do exerciseCmd invUkUs IncludeInCycle with inCycleId = "CYCLE-2026-06"
+  _invUsDe' <- submit operator do exerciseCmd invUsDe IncludeInCycle with inCycleId = "CYCLE-2026-06"
+  _invDeUk' <- submit operator do exerciseCmd invDeUk IncludeInCycle with inCycleId = "CYCLE-2026-06"
 
   -- 6. Lock the cycle.
   cycleLocked <- submit operator do exerciseCmd cycleOpen LockCycle

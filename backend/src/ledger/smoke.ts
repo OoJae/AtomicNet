@@ -98,7 +98,7 @@ async function main() {
   for (const inv of ofTemplate(await activeContracts(op), QN.IntercompanyInvoice).filter((c) =>
     ids.includes(c.payload.invoiceId),
   )) {
-    await submit([op], [exercise(inv.templateId, inv.contractId, "IncludeInCycle", { cycleId })]);
+    await submit([op], [exercise(inv.templateId, inv.contractId, "IncludeInCycle", { inCycleId: cycleId })]);
   }
   const cycle = await find(op, QN.NettingCycle, (p) => p.cycleId === cycleId);
   await submit([op], [exercise(cycle.templateId, cycle.contractId, "LockCycle", {})]);
