@@ -38,8 +38,25 @@ export async function balanceOf(party: string, ccy = "USD"): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------- bootstrap
+/** Retry helper: a freshly-launched sandbox answers HTTP before its participant has
+ *  connected to the synchronizer (PARTY_ALLOCATION_WITHOUT_CONNECTED_SYNCHRONIZER on slow
+ *  cloud boots), so bootstrap operations retry with backoff instead of crashing. */
+async function withRetry<T>(label: string, fn: () => Promise<T>, tries = 30, delayMs = 3000): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 1; i <= tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      console.log(`[bootstrap] ${label} not ready (attempt ${i}/${tries}): ${String((e as Error)?.message ?? e).slice(0, 140)}`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
 export async function bootstrap(): Promise<void> {
-  for (const n of PARTY_NAMES) parties[n] = await allocateOrReuse(n);
+  for (const n of PARTY_NAMES) parties[n] = await withRetry(`allocate ${n}`, () => allocateOrReuse(n));
   for (const sub of SUBS) {
     if ((await balanceOf(parties[sub]!)) === 0) {
       await submit([parties.Bank!], [
