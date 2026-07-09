@@ -99,16 +99,18 @@ docker build -t atomicnet . && docker run -p 8080:8080 -e SEED_DEMO=1 atomicnet
 
 ## ✅ Deployed on Canton DevNet
 
-**AtomicNet runs on the real Canton Network.** The DAR is deployed to the hackathon's shared
-DevNet validator (Canton 3.5.7), our 8 parties live under its namespace, and the full
-**20 → 3 atomic netting cycle has settled on-ledger** (2026-07-09):
+**AtomicNet runs on the real Canton Network.** The hardened model DAR (`atomicnet-model-0.2.0`)
+is deployed to the hackathon's shared DevNet validator (Canton 3.5.7), our 8 parties live under
+its namespace, and the full **20 → 3 atomic netting cycle has settled on-ledger** (2026-07-09):
 
 - Parties: `atomicnet-operator-1`, `atomicnet-sub-{us,uk,de,fr,sg}-1`, `atomicnet-bank-1`,
   `atomicnet-regulator-1` — all under namespace `1220a14ca128…b14e5acf8`
-- First contract: update `122014778b13dc35d3c6709457cf5b59ecc70778f442c6b8d68abda34e9cf3539391`
-  (offset 4,141,881); full demo cycle `CYCLE-1783610967426` — 20 invoices → 3 net payments,
-  balances = opening ± net, Sub_SG nets to zero, and Sub_UK's ledger view shows only its own
-  8 invoices (privacy enforced by the network itself)
+- Cycle `CYCLE-1783619153596` — 20 invoices → 3 net payments, **status `Settled`** (the cycle
+  was transitioned Locked→Settled *inside* `ExecuteSettlement`, bound to the on-ledger approvals),
+  net deltas applied exactly (US −700 / UK +500 / DE −300 / FR +500 / SG 0), Sub_SG nets to zero,
+  and Sub_UK's ledger view shows only its own 8 invoices — privacy enforced by the network itself.
+- The settlement ran on package `7712f358…` (only the 0.2.0 model carries the `cycle`/`approvals`
+  gate fields, so a successful settle proves the hardened model executed on-ledger).
 
 Run it against DevNet: create `.env.devnet` with the hackathon validator's endpoint + OIDC
 client credentials (see the pinned access PDF in the hackathon Discord) plus

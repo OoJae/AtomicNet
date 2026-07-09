@@ -136,7 +136,9 @@ const money = (c: Contract) => ({
   currency: c.payload.currency,
 });
 
-/** Raw visible contract templates+counts AS a party — powers the live privacy proof. */
+/** Raw visible contract templates+counts AS a party — powers the live privacy proof. The
+ *  invoice list is scoped to the active cycle (like getGraph) so the "8 of 20" proof stays
+ *  coherent on a persistent ledger where a party accumulates invoices across many cycles. */
 export async function getVisibility(nameOrId: string) {
   const party = resolve(nameOrId);
   const cs = await activeContracts(party);
@@ -145,7 +147,9 @@ export async function getVisibility(nameOrId: string) {
     const k = c.templateId.split(":").slice(-2).join(":");
     byType[k] = (byType[k] ?? 0) + 1;
   }
-  const invoices = ofTemplate(cs, QN.IntercompanyInvoice).map(money);
+  const inScope = (c: Contract) =>
+    activeCycleId == null || c.payload.cycleId == null || c.payload.cycleId === activeCycleId;
+  const invoices = ofTemplate(cs, QN.IntercompanyInvoice).filter(inScope).map(money);
   return { party: nameOf(party), totalVisible: cs.length, byType, invoices };
 }
 
