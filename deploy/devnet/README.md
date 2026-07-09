@@ -1,6 +1,26 @@
 # Running AtomicNet on Canton Network DevNet
 
-This runbook connects AtomicNet to the **real Canton Network (DevNet)** by operating a
+Two paths, same app:
+
+**Path A — shared validator (hackathon):** the organizers operate a DevNet validator and teams
+deploy onto it. Point the backend at the provided Ledger API endpoint and allocate team-prefixed
+parties:
+```bash
+JSON_API_URL=<provided endpoint> \
+JSON_API_HOST_HEADER=<if the endpoint routes on Host> \
+LEDGER_API_TOKEN=<provided token, if auth enabled> \
+PARTY_HINT_PREFIX=atomicnet- \
+SEED_DEMO=1 node --env-file=../.env src/api/server.ts
+```
+`PARTY_HINT_PREFIX` allocates parties as `atomicnet-operator`, `atomicnet-sub-us`, … (unique on a
+multi-team participant) while the app keeps its friendly names. Upload the DAR first
+(`02-upload-dar.sh` with the same env). Then share the namespace + party list with the operators
+for allowlisting.
+
+**Path B — self-run validator (below):** operate our own Splice validator node whose participant
+joins the Global Synchronizer, then point the AtomicNet backend at it.
+
+This runbook (Path B) connects AtomicNet to the **real Canton Network (DevNet)** by operating a
 [Splice validator node](https://docs.canton.network/global-synchronizer/deployment/validator-docker-compose.md)
 whose participant joins the Global Synchronizer, then pointing the AtomicNet backend at it.
 

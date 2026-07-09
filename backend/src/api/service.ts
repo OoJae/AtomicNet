@@ -10,8 +10,16 @@ import * as agent from "../agent/agent.ts";
 
 const SUBS = [...DEMO_SUBS]; // Sub_US, Sub_UK, Sub_DE, Sub_FR, Sub_SG
 const PARTY_NAMES = ["Operator", ...SUBS, "Bank", "Regulator"];
-export const parties: Record<string, string> = {}; // name -> full id
+export const parties: Record<string, string> = {}; // friendly name -> full id
 const num = (s: string) => parseFloat(s);
+
+// On a SHARED (multi-team) participant — e.g. the hackathon's DevNet validator — party
+// hints must be team-prefixed and unique across teams. PARTY_HINT_PREFIX="atomicnet-"
+// allocates "Sub_US" as on-ledger hint "atomicnet-sub-us" while the app and UI keep the
+// friendly names. Unset (default) keeps the plain hints for local/sandbox deployments.
+const HINT_PREFIX = process.env.PARTY_HINT_PREFIX ?? "";
+const hintOf = (name: string): string =>
+  HINT_PREFIX ? `${HINT_PREFIX}${name.toLowerCase().replace(/_/g, "-")}` : name;
 
 // The cycle currently being worked/demoed; views scope to it so re-runs stay clean.
 let activeCycleId: string | undefined;
@@ -57,7 +65,7 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, tries = 30, del
 }
 
 export async function bootstrap(): Promise<void> {
-  for (const n of PARTY_NAMES) parties[n] = await withRetry(`allocate ${n}`, () => allocateOrReuse(n));
+  for (const n of PARTY_NAMES) parties[n] = await withRetry(`allocate ${n}`, () => allocateOrReuse(hintOf(n)));
   for (const sub of SUBS) {
     if ((await balanceOf(parties[sub]!)) === 0) {
       await submit([parties.Bank!], [

@@ -1,0 +1,370 @@
+- generic [ref=f3e4]:
+  - navigation [ref=f3e5]:
+    - generic [ref=f3e6]:
+      - link "Seaport" [ref=f3e7] [cursor=pointer]:
+        - /url: "#"
+        - img [ref=f3e9]
+        - generic [ref=f3e11]: Seaport
+      - generic [ref=f3e12]:
+        - link "Features" [ref=f3e13] [cursor=pointer]:
+          - /url: "#features"
+        - link "Why Seaport" [ref=f3e14] [cursor=pointer]:
+          - /url: "#why"
+        - link "Pricing" [ref=f3e15] [cursor=pointer]:
+          - /url: "#pricing"
+        - link "FAQ" [ref=f3e16] [cursor=pointer]:
+          - /url: "#faq"
+        - link "Login with Loop" [ref=f3e17] [cursor=pointer]:
+          - /url: https://app.seaport.to
+          - img [ref=f3e18]
+          - generic [ref=f3e22]: Login with Loop
+  - generic [ref=f3e23]:
+    - generic [ref=f3e24]:
+      - heading "The single platform to code , build , deploy , and manage DAML smart contracts." [level=1] [ref=f3e25]:
+        - text: The single platform to
+        - generic [ref=f3e26]:
+          - img
+          - text: code
+        - text: ","
+        - generic [ref=f3e27]:
+          - img
+          - text: build
+        - text: ","
+        - generic [ref=f3e28]:
+          - img
+          - text: deploy
+        - text: ", and manage DAML smart contracts."
+      - paragraph [ref=f3e29]: Build and manage DAML workflows without setup. From development to production — all in one centralized environment.
+      - generic [ref=f3e30]:
+        - link "Get started" [ref=f3e31] [cursor=pointer]:
+          - /url: https://app.seaport.to
+        - link "Contact us" [ref=f3e32] [cursor=pointer]:
+          - /url: https://www.fivenorthdigital.com/for-developers
+    - generic [ref=f3e34]:
+      - generic [ref=f3e40]:
+        - img [ref=f3e41]
+        - generic [ref=f3e43]: https://app.seaport.to/
+      - generic [ref=f3e44]:
+        - complementary [ref=f3e45]:
+          - generic [ref=f3e46]:
+            - button [ref=f3e47] [cursor=pointer]:
+              - img [ref=f3e48]
+            - generic: File Explorer
+          - generic [ref=f3e50]:
+            - button [ref=f3e51] [cursor=pointer]:
+              - img [ref=f3e52]
+            - generic: Search
+          - generic [ref=f3e54]:
+            - button [ref=f3e55] [cursor=pointer]:
+              - img [ref=f3e56]
+            - generic: DAML Compiler
+          - generic [ref=f3e58]:
+            - button [ref=f3e59] [cursor=pointer]:
+              - img [ref=f3e60]
+            - generic: Deploy & Run
+          - generic [ref=f3e62]:
+            - button [ref=f3e63] [cursor=pointer]:
+              - img [ref=f3e64]
+            - generic: Validator Settings
+          - generic [ref=f3e66]:
+            - button [ref=f3e67] [cursor=pointer]:
+              - img [ref=f3e68]
+            - generic: Organizations
+          - generic [ref=f3e70]:
+            - button [ref=f3e71] [cursor=pointer]:
+              - img [ref=f3e72]
+            - generic: Switch to Dark Mode
+        - complementary [ref=f3e74]:
+          - generic [ref=f3e75]:
+            - generic [ref=f3e76]: File Explorer
+            - generic [ref=f3e77]:
+              - button [ref=f3e78]:
+                - img [ref=f3e79]
+              - button [ref=f3e81]:
+                - img [ref=f3e82]
+          - button "Create New File" [ref=f3e85]:
+            - img [ref=f3e86]
+            - text: Create New File
+          - generic [ref=f3e88]:
+            - button "builds" [ref=f3e89] [cursor=pointer]:
+              - img [ref=f3e90]
+              - img [ref=f3e92]
+              - generic [ref=f3e95]: builds
+            - generic [ref=f3e96] [cursor=pointer]:
+              - generic [ref=f3e97]:
+                - img [ref=f3e98]
+                - generic [ref=f3e100]: seaport-0.0.1.dar
+              - generic [ref=f3e101]: built
+            - button "daml" [ref=f3e102] [cursor=pointer]:
+              - img [ref=f3e103]
+              - img [ref=f3e105]
+              - generic [ref=f3e108]: daml
+            - generic [ref=f3e109] [cursor=pointer]:
+              - img [ref=f3e110]
+              - generic [ref=f3e115]: ContractManipulation.daml
+            - generic [ref=f3e116] [cursor=pointer]:
+              - img [ref=f3e117]
+              - generic [ref=f3e119]: .dlint.yaml
+            - generic [ref=f3e120] [cursor=pointer]:
+              - img [ref=f3e121]
+              - generic [ref=f3e123]: .gitattributes
+            - generic [ref=f3e124] [cursor=pointer]:
+              - img [ref=f3e125]
+              - generic [ref=f3e127]: .gitignore
+            - generic [ref=f3e128] [cursor=pointer]:
+              - img [ref=f3e129]
+              - generic [ref=f3e131]: daml.yaml
+        - generic [ref=f3e132]:
+          - generic [ref=f3e135]: ContractManipulation.daml
+          - generic [ref=f3e136]:
+            - generic [ref=f3e138]: ContractManipulation.daml
+            - generic [ref=f3e140]:
+              - button "Build" [ref=f3e141]:
+                - img [ref=f3e142]
+                - text: Build
+              - button [ref=f3e145]:
+                - img [ref=f3e146]
+          - generic [ref=f3e148]:
+            - generic [ref=f3e149]:
+              - generic [ref=f3e150]: "1"
+              - generic [ref=f3e151]: "2"
+              - generic [ref=f3e152]: "3"
+              - generic [ref=f3e153]: "4"
+              - generic [ref=f3e154]: "5"
+              - generic [ref=f3e155]: "6"
+              - generic [ref=f3e156]: "7"
+              - generic [ref=f3e157]: "8"
+              - generic [ref=f3e158]: "9"
+              - generic [ref=f3e159]: "10"
+              - generic [ref=f3e160]: "11"
+              - generic [ref=f3e161]: "12"
+              - generic [ref=f3e162]: "13"
+              - generic [ref=f3e163]: "14"
+              - generic [ref=f3e164]: "15"
+              - generic [ref=f3e165]: "16"
+              - generic [ref=f3e166]: "17"
+              - generic [ref=f3e167]: "18"
+              - generic [ref=f3e168]: "19"
+            - generic [ref=f3e169]:
+              - generic [ref=f3e170]: module ContractManipulation where
+              - generic [ref=f3e172]: import Daml.Script
+              - generic [ref=f3e174]: data Bank = Bank with
+              - generic [ref=f3e175]: "party : Party"
+              - generic [ref=f3e176]: "address : Text"
+              - generic [ref=f3e177]: "telephone : Text"
+              - generic [ref=f3e178]: deriving (Eq, Show)
+              - generic [ref=f3e180]: template Account
+              - generic [ref=f3e181]: with
+              - generic [ref=f3e182]: "accountant : Party"
+              - generic [ref=f3e183]: "owner : Party"
+              - generic [ref=f3e184]: "number : Text"
+              - generic [ref=f3e185]: "bank : Bank"
+              - generic [ref=f3e186]: where
+              - generic [ref=f3e187]: signatory accountant
+          - generic [ref=f3e191]:
+            - generic [ref=f3e192]:
+              - button "TERMINAL" [ref=f3e193]
+              - button "OUTPUT" [ref=f3e194]
+            - generic [ref=f3e195]:
+              - button [ref=f3e196]:
+                - img [ref=f3e197]
+              - button [ref=f3e199]:
+                - img [ref=f3e200]
+              - button [ref=f3e202]:
+                - img [ref=f3e203]
+              - button [ref=f3e205]:
+                - img [ref=f3e206]
+  - generic [ref=f3e209]:
+    - generic [ref=f3e210]:
+      - generic [ref=f3e211]: 01 / Capabilities
+      - heading "Platform Features" [level=2] [ref=f3e212]
+    - generic [ref=f3e213]:
+      - generic [ref=f3e214]:
+        - img [ref=f3e216]
+        - heading "Upload & Connect" [level=3] [ref=f3e218]
+        - paragraph [ref=f3e219]: Upload your DAML code directly or connect your GitHub repository for continuous sync and version control.
+      - generic [ref=f3e220]:
+        - img [ref=f3e222]
+        - heading "Real-time Collaboration" [level=3] [ref=f3e224]
+        - paragraph [ref=f3e225]: Edit code side-by-side with your team. Every change is synchronized in real time across all participants.
+      - generic [ref=f3e226]:
+        - img [ref=f3e228]
+        - heading "DAR Build & Artifacts" [level=3] [ref=f3e230]
+        - paragraph [ref=f3e231]: Compile, version, and manage DAR artifacts in one place. Maintain a deterministic, reproducible build history.
+      - generic [ref=f3e232]:
+        - img [ref=f3e234]
+        - heading "Deploy & Manage" [level=3] [ref=f3e236]
+        - paragraph [ref=f3e237]: Deploy compiled contracts to managed environments and manage their full lifecycle with a single click.
+      - generic [ref=f3e238]:
+        - img [ref=f3e240]
+        - heading "Smart Choice Exercise" [level=3] [ref=f3e242]
+        - paragraph [ref=f3e243]: Exercise choices with auto-populated form generation. Reduce tedious manual input and eliminate human error.
+      - generic [ref=f3e244]:
+        - img [ref=f3e246]
+        - heading "Contract Tracking" [level=3] [ref=f3e248]
+        - paragraph [ref=f3e249]: Keep track of every contract ID and disclosure automatically. No more spreadsheets — everything is indexed for you.
+      - generic [ref=f3e250]:
+        - img [ref=f3e252]
+        - heading "Organization & History" [level=3] [ref=f3e254]
+        - paragraph [ref=f3e255]: Enable your entire team to collaborate, trace contract creation, review execution history, and replay past states.
+      - generic [ref=f3e256]:
+        - img [ref=f3e258]
+        - heading "Validator Management" [level=3] [ref=f3e260]
+        - paragraph [ref=f3e261]: Manage Contract LifeCycle, create, exercise and archive, all from a unified UI - from dev to prod. All team, same view.
+  - generic [ref=f3e262]:
+    - generic [ref=f3e263]:
+      - generic [ref=f3e264]: 02 / Rationale
+      - heading "Why Seaport?" [level=2] [ref=f3e265]
+    - generic [ref=f3e266]:
+      - generic [ref=f3e267]:
+        - generic [ref=f3e268]: 01. Zero Setup
+        - paragraph [ref=f3e269]: Get productive from day one. No local environment to configure, no toolchain to install — open the browser and start building.
+      - generic [ref=f3e270]:
+        - generic [ref=f3e271]: 02. Real-time Collaboration
+        - paragraph [ref=f3e272]: Let others see what you see. From live code editing to shared contract management, your entire team stays in sync.
+      - generic [ref=f3e273]:
+        - generic [ref=f3e274]: 03. Contract Management
+        - paragraph [ref=f3e275]: Manage contract IDs and handle disclosure effortlessly. Stop wasting time on manual bookkeeping between parties.
+      - generic [ref=f3e276]:
+        - generic [ref=f3e277]: 04. Full Audit History
+        - paragraph [ref=f3e278]: Every contract creation and choice exercise is tracked. Complete historical visibility across your entire ledger.
+      - generic [ref=f3e279]:
+        - generic [ref=f3e280]: 05. Live Ledger Debugging
+        - paragraph [ref=f3e281]: Tail the update stream in real time and query ledger state directly in the browser. Diagnose issues without leaving the IDE.
+      - generic [ref=f3e282]:
+        - generic [ref=f3e283]: 06. Production Blueprints
+        - paragraph [ref=f3e284]: Go from zero to production with pre-built blueprints and an intuitive UI to orchestrate validators across your network.
+  - generic [ref=f3e285]:
+    - generic [ref=f3e286]:
+      - generic [ref=f3e287]: 03 / Pricing
+      - heading "Simple, transparent pricing" [level=2] [ref=f3e288]
+    - generic [ref=f3e289]:
+      - generic [ref=f3e291]:
+        - generic [ref=f3e292]:
+          - generic [ref=f3e293]: SEAT-BASED
+          - heading "View Only" [level=3] [ref=f3e294]
+        - generic [ref=f3e295]:
+          - img [ref=f3e297]
+          - generic [ref=f3e299]: Free during Beta Preview
+        - list [ref=f3e300]:
+          - listitem [ref=f3e301]:
+            - img [ref=f3e303]
+            - generic [ref=f3e305]: Read-only ledger access
+          - listitem [ref=f3e306]:
+            - img [ref=f3e308]
+            - generic [ref=f3e310]: View contracts & history
+          - listitem [ref=f3e311]:
+            - img [ref=f3e313]
+            - generic [ref=f3e315]: No editing capabilities
+        - link "Get Started" [ref=f3e316] [cursor=pointer]:
+          - /url: https://app.seaport.to
+      - generic [ref=f3e318]:
+        - generic [ref=f3e319]:
+          - generic [ref=f3e320]: SEAT-BASED
+          - heading "Developer" [level=3] [ref=f3e321]
+        - generic [ref=f3e322]:
+          - img [ref=f3e324]
+          - generic [ref=f3e326]: Free during Beta Preview
+        - list [ref=f3e327]:
+          - listitem [ref=f3e328]:
+            - img [ref=f3e330]
+            - generic [ref=f3e332]: Full Cloud IDE access
+          - listitem [ref=f3e333]:
+            - img [ref=f3e335]
+            - generic [ref=f3e337]: DAR compilation & deployment
+          - listitem [ref=f3e338]:
+            - img [ref=f3e340]
+            - generic [ref=f3e342]: Real-time collaboration
+          - listitem [ref=f3e343]:
+            - img [ref=f3e345]
+            - generic [ref=f3e347]: Contract management tools
+        - link "Start Building" [ref=f3e348] [cursor=pointer]:
+          - /url: https://app.seaport.to
+      - generic [ref=f3e350]:
+        - generic [ref=f3e351]:
+          - generic [ref=f3e352]: VALIDATOR-BASED
+          - heading "Validator" [level=3] [ref=f3e353]
+        - generic [ref=f3e354]:
+          - img [ref=f3e356]
+          - generic [ref=f3e358]: Free during Beta Preview
+        - list [ref=f3e359]:
+          - listitem [ref=f3e360]:
+            - img [ref=f3e362]
+            - generic [ref=f3e364]: Dedicated validator instance
+          - listitem [ref=f3e365]:
+            - img [ref=f3e367]
+            - generic [ref=f3e369]: Production orchestration
+          - listitem [ref=f3e370]:
+            - img [ref=f3e372]
+            - generic [ref=f3e374]: Network management UI
+        - link "Add Validator" [ref=f3e375] [cursor=pointer]:
+          - /url: https://app.seaport.to
+  - generic [ref=f3e376]:
+    - generic [ref=f3e377]:
+      - generic [ref=f3e378]: 04 / Reference
+      - heading "Frequently Asked Questions" [level=2] [ref=f3e379]
+    - generic [ref=f3e380]:
+      - button "Do I need to install the DAML SDK locally?" [ref=f3e382]:
+        - generic [ref=f3e383]: Do I need to install the DAML SDK locally?
+        - img [ref=f3e384]
+      - button "How does real-time collaboration handle conflicts?" [ref=f3e387]:
+        - generic [ref=f3e388]: How does real-time collaboration handle conflicts?
+        - img [ref=f3e389]
+      - button "What is a CC in the pricing model?" [ref=f3e392]:
+        - generic [ref=f3e393]: What is a CC in the pricing model?
+        - img [ref=f3e394]
+      - button "Can I export my DAR artifacts?" [ref=f3e397]:
+        - generic [ref=f3e398]: Can I export my DAR artifacts?
+        - img [ref=f3e399]
+      - button "How do I connect my GitHub repository?" [ref=f3e402]:
+        - generic [ref=f3e403]: How do I connect my GitHub repository?
+        - img [ref=f3e404]
+      - button "Is there a free tier available?" [ref=f3e407]:
+        - generic [ref=f3e408]: Is there a free tier available?
+        - img [ref=f3e409]
+  - contentinfo [ref=f3e411]:
+    - generic [ref=f3e412]:
+      - generic [ref=f3e413]:
+        - link "Seaport" [ref=f3e414] [cursor=pointer]:
+          - /url: "#"
+          - img [ref=f3e416]
+          - generic [ref=f3e418]: Seaport
+        - paragraph [ref=f3e419]: The single platform to code, build, deploy, and manage DAML smart contracts.
+      - generic [ref=f3e421]:
+        - generic [ref=f3e423]:
+          - generic [ref=f3e424]:
+            - paragraph [ref=f3e425]: Ecosystem
+            - generic [ref=f3e426]:
+              - link "5N Wallet" [ref=f3e427] [cursor=pointer]:
+                - /url: https://cantonloop.com
+              - link "5N Lighthouse" [ref=f3e428] [cursor=pointer]:
+                - /url: https://lighthouse.xyz
+              - link "5N ID" [ref=f3e429] [cursor=pointer]:
+                - /url: https://id.cantonloop.com
+          - generic [ref=f3e430]:
+            - paragraph [ref=f3e431]: Resources
+            - generic [ref=f3e432]:
+              - link "About Us" [ref=f3e433] [cursor=pointer]:
+                - /url: https://www.fivenorthdigital.com
+              - link "Documentation" [ref=f3e434] [cursor=pointer]:
+                - /url: https://docs.fivenorth.io
+              - link "Developers" [ref=f3e435] [cursor=pointer]:
+                - /url: "#"
+          - generic [ref=f3e436]:
+            - paragraph [ref=f3e437]: Legal
+            - generic [ref=f3e438]:
+              - link "Privacy Policy" [ref=f3e439] [cursor=pointer]:
+                - /url: "#"
+              - link "Terms of Service" [ref=f3e440] [cursor=pointer]:
+                - /url: "#"
+        - generic [ref=f3e441]:
+          - button "Use system theme" [ref=f3e442]:
+            - img [ref=f3e443]
+          - button "Use light theme" [ref=f3e445]:
+            - img [ref=f3e446]
+          - button "Use dark theme" [ref=f3e448]:
+            - img [ref=f3e449]
+    - generic [ref=f3e451]:
+      - paragraph [ref=f3e452]: © 2026 All rights reserved.
+      - generic "All services are online" [ref=f3e453]:
+        - generic [ref=f3e455]: All services are online
