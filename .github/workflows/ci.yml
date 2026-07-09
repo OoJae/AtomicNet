@@ -70,3 +70,53 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+
+  integration:
+    name: Integration (live JSON Ledger API — 20→3 + privacy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Cache dpm + SDKs
+        uses: actions/cache@v4
+        with:
+          path: ~/.dpm
+          key: dpm-sdk-3.4.11-${{ runner.os }}-v1
+      - name: Install dpm + SDK 3.4.11
+        run: |
+          if [ ! -x "$HOME/.dpm/bin/dpm" ]; then
+            curl -fsSL https://get.digitalasset.com/install/install.sh | sh
+          fi
+          echo "$HOME/.dpm/bin" >> "$GITHUB_PATH"
+          "$HOME/.dpm/bin/dpm" install 3.4.11
+      - name: Build DARs
+        run: dpm build --all
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install backend deps
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+      - name: Boot sandbox + backend, run the 20→3 cycle, assert privacy on the live ledger
+        run: |
+          set -e
+          dpm sandbox --json-api-port 7575 --dar daml/.daml/dist/atomicnet-model-0.2.0.dar --no-tty &
+          for i in $(seq 1 90); do curl -sf http://localhost:7575/v2/version >/dev/null 2>&1 && break; sleep 2; done
+          ( cd backend && JSON_API_URL=http://localhost:7575 SEED_DEMO=0 node src/api/server.ts >/tmp/be.log 2>&1 & )
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/api/health >/dev/null 2>&1 && break; sleep 2; done
+          RED=$(curl -s --max-time 180 -X POST http://localhost:8080/api/demo/run)
+          echo "demo result: $RED"
+          echo "$RED" | jq -e '.reduction.gross==20 and .reduction.net==3' >/dev/null \
+            || { echo "FAIL: expected 20 to 3"; cat /tmp/be.log; exit 1; }
+          # Privacy is ledger-enforced: querying AS Sub_UK returns only its own 8 invoices.
+          UK=$(curl -s http://localhost:8080/api/p/Sub_UK/visibility | jq '.invoices | length')
+          echo "Sub_UK sees $UK / 20 invoices"
+          test "$UK" -eq 8 || { echo "FAIL: privacy — Sub_UK should see exactly 8 invoices"; exit 1; }
+          echo "integration OK — 20 to 3 settled on a live JSON Ledger API; per-party privacy holds"

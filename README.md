@@ -12,7 +12,7 @@ AtomicNet lets the subsidiaries of a multinational settle their intercompany inv
 - **On Canton DevNet (the real network): https://atomicnet-devnet-production.up.railway.app** — the app connected to the hackathon's shared DevNet validator; the settled 20→3 cycle you see is real on-ledger state. (Note: actions here are real network transactions — the full demo cycle takes ~7 minutes to settle.)
 - **Sandbox playground: https://atomicnet-production.up.railway.app** — the same app on a self-contained Canton ledger (fast, reseeds on restart) for freely clicking through the full flow.
 
-Try, in order: **Network** tab → toggle *Gross web ↔ Net settlement* → switch *Acting as* → **UK** → **Privacy Proof** (most invoices are simply *not there* — hidden by the ledger, not the app) → **Regulator** (sees everything) → **Operator** → *▷ Run full demo cycle* (instant on the sandbox; real settlement latency on DevNet).
+Try, in order: **Network** tab → toggle *Gross web ↔ Net settlement* → switch *Acting as* → **UK** → **Privacy Proof** (most invoices are simply *not there* — hidden by the ledger, not the app) → **Regulator** (sees the netting & settlement trail) → **Operator** → *▷ Run full demo cycle* (instant on the sandbox; real settlement latency on DevNet).
 
 ## Why this is impossible anywhere but Canton
 
@@ -45,7 +45,7 @@ flowchart LR
   AGENT -.->|proposal + rationale only| FE
 ```
 
-**The settlement mechanic (why it's atomic *and* authorized):** each net payer pre-authorizes by earmarking funds into a `DepositAllocation` **co-signed by payer + bank** — one allocation per planned payment instruction. The operator's `ExecuteSettlement` consumes every allocation and pays every receiver in ONE transaction; each nested `Disburse` surfaces that allocation's co-signature, so the operator never needs re-authorization at settle time. The choice itself re-checks per-receiver totals and total conservation — any shortfall reverts everything. And the AI agent? It returns a *suggestion object* that can only pre-fill the cycle form; settlement still requires every subsidiary's on-ledger `ApproveNetPosition` **and** a human clicking Execute.
+**The settlement mechanic (why it's atomic *and* authorized):** each net payer pre-authorizes by earmarking funds into a `DepositAllocation` **co-signed by payer + bank** — one allocation per planned payment instruction. The operator's `ExecuteSettlement` consumes every allocation and pays every receiver in ONE transaction; each nested `Disburse` surfaces that allocation's co-signature, so the operator never needs re-authorization at settle time. **The choice binds settlement to the ledger's own state:** it requires the cycle to be `Locked`, fetches every subsidiary's on-ledger `ApprovedNetPosition` and re-derives that they conserve to zero, checks the payouts equal exactly the approved receiving positions, verifies each allocation is earmarked for this cycle in the settlement currency, and transitions the cycle to `Settled` — so the operator *cannot* settle an unapproved or non-conserved set, and no cycle settles twice. Any shortfall or mismatch reverts everything. And the AI agent? It returns a *suggestion object* that can only pre-fill the cycle form; settlement still requires every subsidiary's on-ledger `ApproveNetPosition` **and** a human clicking Execute.
 
 ## What our tests prove
 
@@ -58,10 +58,11 @@ Every guarantee a judge should care about is a runnable test, not a claim.
 | `lifecycle` | The full invoice → cycle → net-position → approval flow works end to end. |
 | `settlement` | Net payers reserve funds; the operator settles every leg in ONE transaction; balances = opening ± net, cash conserved. |
 | `atomicity` | One under-funded leg → the **entire** settlement reverts, no balances change. *No partial settlement, no exposure.* |
+| `settlementGate` | The operator **cannot** settle without the subsidiaries' on-ledger approvals, and cannot pay out more than they approved — the approval gate + Σ=0 are enforced *in the choice*, not the app. |
 | `multiCurrencySettlement` | Invoices in USD/EUR/GBP FX-net to USD (Σ = 0, exactly) and settle atomically. |
 | `privacy` | A sibling cannot see another pair's invoice or another sub's net position — privacy by protocol, not by app. |
 | `authorization` | No party can forge an invoice binding another; no subsidiary can trigger settlement or approve another's position. |
-| `regulatorDisclosure` | The regulator reconstructs the full audit trail; siblings stay blind to each other. Selective disclosure without broadcast. |
+| `regulatorDisclosure` | The regulator is an observer on cycles, net positions, approvals and settlements, so it reconstructs the netting & settlement trail — while siblings stay blind to each other. Selective disclosure without broadcast. |
 
 **Backend tests** ([backend/src/](backend/src/), run `pnpm test` — zero runtime deps, Node's built-in runner):
 
@@ -70,6 +71,9 @@ Every guarantee a judge should care about is a runnable test, not a claim.
 | `netting.test.ts` | FX conversion, Σ net == 0 (tampered books rejected), plan routing, reduction ratio. |
 | `demoData.test.ts` | The demo dataset genuinely nets **20 → 3** with Sub_SG at exactly zero — via the real netting code, not hand-waving. |
 | `agent.guardrail.test.ts` | The agent module has **no code path to settlement** (imports nothing from the ledger/settle path). |
+| `agent.behavior.test.ts` | Behavioral proof: running `agentPropose()` issues **zero ledger writes** (asserted at the network boundary) — the agent reads and proposes, never settles. |
+
+CI also runs an **integration job** that boots a live `dpm sandbox`, drives the backend through the real JSON Ledger API, settles the 20→3 cycle, and asserts per-party privacy (Sub_UK sees exactly its own 8 invoices) — so the TS bridge, not just the model, is exercised end to end.
 
 ## Run it locally
 
@@ -81,7 +85,7 @@ dpm build --all                                   # model + test DARs
 ( cd daml-tests && dpm test )                     # the proof suite
 
 # live app (3 terminals, or use Docker below)
-dpm sandbox --json-api-port 7575 --dar daml/.daml/dist/atomicnet-model-0.1.0.dar
+dpm sandbox --json-api-port 7575 --dar daml/.daml/dist/atomicnet-model-0.2.0.dar
 cp .env.example .env                              # add your agent API key (optional)
 cd backend  && pnpm install && SEED_DEMO=1 node --env-file=../.env src/api/server.ts
 cd frontend && npm install  && npm run dev        # → http://localhost:5173
@@ -117,8 +121,10 @@ path and the self-run Splice validator path.
 
 ## Honest scope (MVP vs production)
 
-- **Real:** the Daml authorization/privacy model, atomic settlement, the FX netting math, the live ledger the demo runs on, the agent guardrails.
-- **Simulated / simplified:** the bank and its tokenized deposits are hand-rolled (`Deposit`/`DepositAllocation`) rather than the Canton token standard — deliberately the same allocation→atomic-disburse shape, so swapping in standard holdings/allocations is future work, not a redesign. FX rates are fixed per cycle (no live feed). Party auth is a demo switcher, not wallet auth. In-memory ledger (resets on restart). No production KYC/tax/transfer-pricing logic.
+- **Real:** the Daml authorization/privacy model, atomic settlement bound to on-ledger approvals, the FX netting math, the live ledger the demo runs on, the agent guardrails.
+- **Simulated / simplified:** the bank and its tokenized deposits are hand-rolled (`Deposit`/`DepositAllocation`) rather than the Canton token standard — deliberately the same allocation→atomic-disburse shape, so swapping in standard holdings/allocations is future work, not a redesign. FX rates are fixed per cycle (no live feed). Party auth is a demo switcher, not wallet auth. No production KYC/tax/transfer-pricing logic.
+- **What the ledger enforces vs. what the operator is trusted for:** the ledger enforces *conservation* (Σ net == 0), *atomicity*, the *approval gate*, and the *cycle/currency earmarks*. The **netting arithmetic itself** — that the net positions equal the cycle's invoices — is computed off-ledger by the trusted operator (each subsidiary still approves its own resulting position before any cash moves).
+- **Privacy on shared DevNet:** privacy is airtight at the **protocol level** and on a single-tenant validator (proven by the `privacy`/`regulatorDisclosure` tests + the live per-party queries). On the hackathon's **shared** 5N DevNet validator, the Ledger-API credential is distributed to all teams via a PDF and mapped to a shared ledger user, so operationally a co-tenant holding that credential could read broadly or act as our parties — a property of the shared-sandbox onboarding, not of the model. A dedicated least-privilege participant/user restores full operational privacy.
 
 ## Repo layout
 

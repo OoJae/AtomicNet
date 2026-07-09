@@ -1,6 +1,6 @@
 -- REGULATOR selective disclosure: the regulator is an explicit observer on the cycle, net
--- positions, approvals, and settlement, so it reconstructs the full audit trail -- WITHOUT
--- subsidiaries having to expose anything to each other. Siblings stay blind.
+-- positions, approvals, and settlement, so it reconstructs the netting & settlement trail --
+-- WITHOUT subsidiaries having to expose anything to each other. Siblings stay blind.
 module AtomicNet.Test.Regulator where
 
 import AtomicNet.Types

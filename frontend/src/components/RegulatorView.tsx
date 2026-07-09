@@ -11,7 +11,7 @@ export function RegulatorView({ refresh }: { refresh: number }) {
     <div className="stack">
       <div className="banner">
         Selective disclosure: the regulator is an explicit observer on cycles, net positions, approvals and
-        settlements — reconstructing the full audit trail — <b>without</b> subsidiaries ever seeing each other.
+        settlements — reconstructing the netting &amp; settlement trail — <b>without</b> subsidiaries ever seeing each other.
       </div>
       <div className="grid c2">
         <div className="card">
