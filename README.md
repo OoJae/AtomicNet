@@ -90,6 +90,18 @@ Or the single-container way (exactly what the live demo runs):
 docker build -t atomicnet . && docker run -p 8080:8080 -e SEED_DEMO=1 atomicnet
 ```
 
+## Canton Network DevNet
+
+The hosted demo runs a self-contained Canton sandbox (stable, resets on redeploy). AtomicNet is
+also **DevNet-ready**: [deploy/devnet/](deploy/devnet/) contains the full runbook + scripts to run
+it against the **real Canton Network** via a Splice validator node (self-service DevNet onboarding,
+DAR upload, party allocation in our validator's namespace, backend env wiring). The compatibility
+risks are already eliminated locally: the SDK 3.4.11 DAR and the package-name-only client ran the
+complete 20→3 cycle green against **Canton 3.5.1** — the same line DevNet runs. The one external
+prerequisite is the SV egress-IP allowlist (a 2–7 day process; requested via the hackathon
+sponsors). The DevNet validator is a run-on-demand deployment — DevNet itself is reset quarterly —
+so the always-on public link stays on the sandbox, clearly labeled.
+
 ## Honest scope (MVP vs production)
 
 - **Real:** the Daml authorization/privacy model, atomic settlement, the FX netting math, the live ledger the demo runs on, the agent guardrails.

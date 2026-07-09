@@ -72,7 +72,7 @@ async function main() {
       ],
     );
     const prop = await find(payer, QN.InvoiceProposal, (p) => p.invoiceId === id);
-    await submit([payer], [exercise(prop.templateId, prop.contractId, "AcceptInvoice", {})]);
+    await submit([payer], [exercise(T.InvoiceProposal, prop.contractId, "AcceptInvoice", {})]);
   }
   await raise(uk, us, 1000, "USD", "INV-UK-US"); // US owes UK 1000 USD
   await raise(us, de, 500, "EUR", "INV-US-DE"); //  DE owes US 500 EUR
@@ -98,10 +98,10 @@ async function main() {
   for (const inv of ofTemplate(await activeContracts(op), QN.IntercompanyInvoice).filter((c) =>
     ids.includes(c.payload.invoiceId),
   )) {
-    await submit([op], [exercise(inv.templateId, inv.contractId, "IncludeInCycle", { inCycleId: cycleId })]);
+    await submit([op], [exercise(T.IntercompanyInvoice, inv.contractId, "IncludeInCycle", { inCycleId: cycleId })]);
   }
   const cycle = await find(op, QN.NettingCycle, (p) => p.cycleId === cycleId);
-  await submit([op], [exercise(cycle.templateId, cycle.contractId, "LockCycle", {})]);
+  await submit([op], [exercise(T.NettingCycle, cycle.contractId, "LockCycle", {})]);
   log("cycle opened, invoices included, locked");
 
   // 5. Compute net positions via the netting service (operator observes all invoices).
@@ -134,7 +134,7 @@ async function main() {
   }
   for (const sub of [us, uk, de]) {
     const np = await find(sub, QN.NetPosition, (p) => p.subsidiary === sub && p.cycleId === cycleId);
-    await submit([sub], [exercise(np.templateId, np.contractId, "ApproveNetPosition", {})]);
+    await submit([sub], [exercise(T.NetPosition, np.contractId, "ApproveNetPosition", {})]);
   }
   log("net positions approved by all subsidiaries");
 
@@ -147,7 +147,7 @@ async function main() {
     const dep = await find(t.payer, QN.Deposit, (p) => p.currency === "USD" && p.owner === t.payer && num(p.amount) >= t.amount);
     await submit(
       [t.payer],
-      [exercise(dep.templateId, dep.contractId, "Allocate", { operator: op, allocAmount: dec(t.amount), cycleId })],
+      [exercise(T.Deposit, dep.contractId, "Allocate", { operator: op, allocAmount: dec(t.amount), cycleId })],
     );
     const alloc = ofTemplate(await activeContracts(op), QN.DepositAllocation).find(
       (c) => c.payload.owner === t.payer && num(c.payload.amount) === t.amount && c.payload.cycleId === cycleId && !used.has(c.contractId),
@@ -171,7 +171,7 @@ async function main() {
     ],
   );
   const batch = await find(op, QN.SettlementBatch, (p) => p.cycleId === cycleId);
-  await submit([op], [exercise(batch.templateId, batch.contractId, "ExecuteSettlement", {})]);
+  await submit([op], [exercise(T.SettlementBatch, batch.contractId, "ExecuteSettlement", {})]);
   log("settlement executed atomically");
 
   // 9. Assert final balances = opening +/- net.

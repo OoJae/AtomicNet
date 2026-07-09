@@ -1,6 +1,11 @@
-// Thin hand-rolled client for the Canton JSON Ledger API v2 (dev sandbox, open auth).
+// Thin hand-rolled client for the Canton JSON Ledger API v2.
 // Reads are performed AS a given party — the ledger does the privacy filtering, not us.
+// Works against: a local `dpm sandbox` (no auth), and a Splice validator node's JSON API
+// (nginx vhost `json-ledger-api.localhost` — set JSON_API_HOST_HEADER when the URL is an
+// IP/localhost; set LEDGER_API_TOKEN if the validator runs with auth enabled, `-a`).
 const JSON_API = process.env.JSON_API_URL ?? "http://localhost:7575";
+const HOST_HEADER = process.env.JSON_API_HOST_HEADER; // e.g. json-ledger-api.localhost
+const TOKEN = process.env.LEDGER_API_TOKEN; // Bearer token (only if auth is enabled)
 
 export interface CreateCommand {
   CreateCommand: { templateId: string; createArguments: Record<string, unknown> };
@@ -26,7 +31,12 @@ export interface Contract {
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(JSON_API + path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(HOST_HEADER ? { Host: HOST_HEADER } : {}),
+      ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
   if (!res.ok) {
     const text = await res.text();

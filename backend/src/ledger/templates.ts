@@ -1,6 +1,7 @@
 // Template IDs + Create/Exercise command builders for the AtomicNet model.
-// Creates use the convenient `#<package-name>:Module:Entity` form (resolved by the JSON API).
-// Exercises should pass the contract's own templateId (package-id form) read from the ACS.
+// ALL commands (creates AND exercises) use the `#<package-name>:Module:Entity` form:
+// Canton 3.5+ dropped package-id template references on the Ledger API, so the ACS's
+// package-id `templateId` must never be echoed back into commands.
 import type { Command } from "./client.ts";
 
 const PKG = "#atomicnet-model";

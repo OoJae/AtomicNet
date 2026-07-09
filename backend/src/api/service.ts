@@ -126,7 +126,7 @@ export async function acceptInvoice(payerName: string, invoiceId: string) {
   const payer = resolve(payerName);
   const prop = await find(payer, QN.InvoiceProposal, (p) => p.invoiceId === invoiceId);
   if (!prop) throw new Error(`no proposal ${invoiceId} for ${payerName}`);
-  await submit([payer], [exercise(prop.templateId, prop.contractId, "AcceptInvoice", {})]);
+  await submit([payer], [exercise(T.InvoiceProposal, prop.contractId, "AcceptInvoice", {})]);
   return { ok: true };
 }
 
@@ -160,9 +160,9 @@ export async function lockCycle(cycleId: string) {
   const invoiceContracts = ofTemplate(await activeContracts(op), QN.IntercompanyInvoice)
     .filter((c) => isParticipant(c.payload.issuer) && isParticipant(c.payload.payer) && c.payload.cycleId == null);
   for (const inv of invoiceContracts) {
-    await submit([op], [exercise(inv.templateId, inv.contractId, "IncludeInCycle", { inCycleId: cycleId })]);
+    await submit([op], [exercise(T.IntercompanyInvoice, inv.contractId, "IncludeInCycle", { inCycleId: cycleId })]);
   }
-  await submit([op], [exercise(cycle.templateId, cycle.contractId, "LockCycle", {})]);
+  await submit([op], [exercise(T.NettingCycle, cycle.contractId, "LockCycle", {})]);
 
   const invoices: Invoice[] = invoiceContracts.map((c) => ({
     issuer: c.payload.issuer, payer: c.payload.payer, amount: num(c.payload.amount), currency: c.payload.currency,
@@ -182,7 +182,7 @@ export async function approveNetPosition(subName: string, cycleId: string) {
   const sub = resolve(subName);
   const np = await find(sub, QN.NetPosition, (p) => p.subsidiary === sub && p.cycleId === cycleId);
   if (!np) throw new Error(`no net position for ${subName} in ${cycleId}`);
-  await submit([sub], [exercise(np.templateId, np.contractId, "ApproveNetPosition", {})]);
+  await submit([sub], [exercise(T.NetPosition, np.contractId, "ApproveNetPosition", {})]);
   return { ok: true };
 }
 
@@ -199,7 +199,7 @@ export async function allocate(subName: string, cycleId: string) {
   for (const t of myTransfers) {
     const dep = await find(sub, QN.Deposit, (p) => p.owner === sub && p.currency === "USD" && num(p.amount) >= t.amount);
     if (!dep) throw new Error(`${subName} has insufficient USD to allocate ${t.amount}`);
-    await submit([sub], [exercise(dep.templateId, dep.contractId, "Allocate", { operator: parties.Operator!, allocAmount: dec(t.amount), cycleId })]);
+    await submit([sub], [exercise(T.Deposit, dep.contractId, "Allocate", { operator: parties.Operator!, allocAmount: dec(t.amount), cycleId })]);
     total += t.amount;
   }
   return { ok: true, allocated: total, allocations: myTransfers.length };
@@ -227,7 +227,7 @@ export async function settle(cycleId: string) {
     transfers, payouts: plan.payouts.map((p) => tuple2(p.receiver, dec(p.amount))),
   })]);
   const batch = await find(op, QN.SettlementBatch, (p) => p.cycleId === cycleId);
-  await submit([op], [exercise(batch!.templateId, batch!.contractId, "ExecuteSettlement", {})]);
+  await submit([op], [exercise(T.SettlementBatch, batch!.contractId, "ExecuteSettlement", {})]);
   const balances = Object.fromEntries(await Promise.all(SUBS.map(async (s) => [s, await balanceOf(parties[s]!)])));
   return { ok: true, settled: plan.transfers.length, balances };
 }
