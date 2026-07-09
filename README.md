@@ -8,8 +8,8 @@ AtomicNet lets the subsidiaries of a multinational settle their intercompany inv
 
 > Hackathon project — Build on Canton (Encode Club × Canton Foundation, 2026). MVP scope: 5 subsidiaries, 1 operator, 1 bank, 1 regulator; 3 currencies; hosted demo environment (not mainnet).
 
-**🌐 Live demos:**
-- **On Canton DevNet (the real network): https://atomicnet-devnet-production.up.railway.app** — the app connected to the hackathon's shared DevNet validator; the settled 20→3 cycle you see is real on-ledger state. (Note: actions here are real network transactions — the full demo cycle takes ~7 minutes to settle.)
+**🌐 Live demos** (each origin serves the brand story at `/`, the working console at `/app`, plus `/how` and `/proof`):
+- **On Canton DevNet (the real network): https://atomicnet-devnet-production.up.railway.app** — the app connected to the hackathon's shared DevNet validator; the settled 20→3 cycle you see is real on-ledger state. (Note: actions here are real network transactions — the full demo cycle takes ~7 minutes to settle; a staged cycle is usually waiting so you can approve + settle by hand in ~1 minute.)
 - **Sandbox playground: https://atomicnet-production.up.railway.app** — the same app on a self-contained Canton ledger (fast, reseeds on restart) for freely clicking through the full flow.
 
 Try, in order: **Network** tab → toggle *Gross web ↔ Net settlement* → switch *Acting as* → **UK** → **Privacy Proof** (most invoices are simply *not there* — hidden by the ledger, not the app) → **Regulator** (sees the netting & settlement trail) → **Operator** → *▷ Run full demo cycle* (instant on the sandbox; real settlement latency on DevNet).

@@ -35,6 +35,9 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
+          <a href="/" title="AtomicNet home" style={{ display: "inline-flex", alignItems: "center", marginRight: 2 }}>
+            <img src="/brand/logomark.svg" alt="" width={22} height={22} />
+          </a>
           Atomic<span className="dot">Net</span> <small>private atomic netting · Canton</small>
           {readOnly && <span className="ro-badge" title="This deployment is a live, read-only view of the real Canton DevNet ledger. Writes are disabled.">read-only · live DevNet</span>}
         </div>

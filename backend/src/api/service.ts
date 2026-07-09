@@ -27,6 +27,17 @@ const hintOf = (name: string): string =>
 // The cycle currently being worked/demoed; views scope to it so re-runs stay clean.
 let activeCycleId: string | undefined;
 
+/** View scope for invoices: the active cycle's, plus not-yet-included invoices belonging to
+ *  the SAME run (matched by the demo tag, mirroring lockCycle) — so the graph builds up live
+ *  during a run, while orphans from abandoned/failed runs never pollute the numbers. */
+function invoiceInScope(c: Contract): boolean {
+  if (activeCycleId == null) return true;
+  if (c.payload.cycleId === activeCycleId) return true;
+  if (c.payload.cycleId != null) return false; // some other cycle's invoice
+  const tag = activeCycleId.startsWith("CYCLE-") ? activeCycleId.slice("CYCLE-".length) : undefined;
+  return tag != null && String(c.payload.invoiceId).endsWith(`-${tag}`);
+}
+
 const DEFAULT_RATES: FxRate[] = DEMO_RATES;
 
 // Currencies the netting service can actually convert (USD + every FX-rate leg). Inputs
@@ -147,9 +158,7 @@ export async function getVisibility(nameOrId: string) {
     const k = c.templateId.split(":").slice(-2).join(":");
     byType[k] = (byType[k] ?? 0) + 1;
   }
-  const inScope = (c: Contract) =>
-    activeCycleId == null || c.payload.cycleId == null || c.payload.cycleId === activeCycleId;
-  const invoices = ofTemplate(cs, QN.IntercompanyInvoice).filter(inScope).map(money);
+  const invoices = ofTemplate(cs, QN.IntercompanyInvoice).filter(invoiceInScope).map(money);
   return { party: nameOf(party), totalVisible: cs.length, byType, invoices };
 }
 
@@ -356,10 +365,8 @@ export async function getCycle(cycleId: string) {
 export async function getGraph() {
   const op = parties.Operator!;
   const cs = await activeContracts(op);
-  const inScope = (c: Contract) =>
-    activeCycleId == null || c.payload.cycleId == null || c.payload.cycleId === activeCycleId;
   const grossEdges = ofTemplate(cs, QN.IntercompanyInvoice)
-    .filter(inScope)
+    .filter(invoiceInScope)
     .map((c) => ({ from: nameOf(c.payload.issuer), to: nameOf(c.payload.payer), amount: num(c.payload.amount), currency: c.payload.currency }));
   const positions = ofTemplate(cs, QN.ApprovedNetPosition)
     .filter((c) => activeCycleId == null || c.payload.cycleId === activeCycleId)
@@ -416,9 +423,8 @@ export const runDemo = () => withLock(runDemoImpl);
 export async function agentPropose() {
   const op = parties.Operator!;
   const cs = await activeContracts(op);
-  const inScope = (c: Contract) => activeCycleId == null || c.payload.cycleId == null || c.payload.cycleId === activeCycleId;
   const invoices: Invoice[] = ofTemplate(cs, QN.IntercompanyInvoice)
-    .filter(inScope)
+    .filter(invoiceInScope)
     .map((c) => ({ issuer: nameOf(c.payload.issuer), payer: nameOf(c.payload.payer), amount: num(c.payload.amount), currency: c.payload.currency }));
   const nets = computeNetPositions(invoices, DEFAULT_RATES, "USD");
   const plan = buildSettlementPlan(nets);
