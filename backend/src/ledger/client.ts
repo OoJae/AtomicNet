@@ -61,22 +61,38 @@ export interface Contract {
   observers: string[];
 }
 
+// The shared DevNet validator returns transient 503/504/429 under load. Retry those (and
+// network errors) with backoff. The request body is unchanged across attempts — and submits
+// carry a STABLE commandId — so Canton deduplicates any command that actually committed
+// between a timeout and the retry (see submit()).
+const TRANSIENT = new Set([429, 502, 503, 504]);
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const tok = await bearer();
-  const res = await fetch(JSON_API + path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(HOST_HEADER ? { Host: HOST_HEADER } : {}),
-      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, Math.min(8000, 400 * 2 ** attempt)));
+    const tok = await bearer();
+    let res: Response;
+    try {
+      res = await fetch(JSON_API + path, {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...(HOST_HEADER ? { Host: HOST_HEADER } : {}),
+          ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+          ...(init?.headers ?? {}),
+        },
+      });
+    } catch (e) {
+      lastErr = e; // network error / fetch timeout — retry
+      continue;
+    }
+    if (res.ok) return res.json() as Promise<T>;
     const text = await res.text();
-    throw new Error(`${init?.method ?? "GET"} ${path} -> ${res.status}: ${text}`);
+    const err = new Error(`${init?.method ?? "GET"} ${path} -> ${res.status}: ${text}`);
+    if (TRANSIENT.has(res.status)) { lastErr = err; continue; } // transient — retry
+    throw err; // real error — surface immediately
   }
-  return res.json() as Promise<T>;
+  throw lastErr;
 }
 
 export async function ledgerEnd(): Promise<number> {
@@ -135,18 +151,27 @@ export interface SubmitResult {
   completionOffset: number;
 }
 export async function submit(actAs: string[], commands: Command[]): Promise<SubmitResult> {
-  return api<SubmitResult>("/v2/commands/submit-and-wait", {
-    method: "POST",
-    body: JSON.stringify({
-      // With auth enabled, userId must match the token's ledger user (e.g. "6" on the
-      // shared hackathon validator); any label works on a no-auth local sandbox.
-      userId: process.env.LEDGER_USER_ID ?? "atomicnet-backend",
-      commandId: `cmd-${Date.now()}-${Math.floor(Math.random() * 1e9)}`,
-      actAs,
-      readAs: [],
-      commands,
-    }),
+  const body = JSON.stringify({
+    // With auth enabled, userId must match the token's ledger user (e.g. "6" on the
+    // shared hackathon validator); any label works on a no-auth local sandbox.
+    userId: process.env.LEDGER_USER_ID ?? "atomicnet-backend",
+    // Stable per logical submit, so a transient-retry (see api()) reuses the SAME commandId
+    // and Canton dedups a command that already committed before the timeout.
+    commandId: `cmd-${Date.now()}-${Math.floor(Math.random() * 1e9)}`,
+    actAs,
+    readAs: [],
+    commands,
   });
+  try {
+    return await api<SubmitResult>("/v2/commands/submit-and-wait", { method: "POST", body });
+  } catch (e) {
+    // A retry may have re-sent a command that already committed on the first attempt; Canton
+    // rejects the duplicate by commandId. That means the intended effect IS on-ledger — success.
+    if (/DUPLICATE_COMMAND|ALREADY_EXISTS/i.test(String((e as Error)?.message ?? e))) {
+      return { updateId: "deduped", completionOffset: -1 };
+    }
+    throw e;
+  }
 }
 
 /** Active contracts visible to `party` (the ledger filters by stakeholder = real privacy). */
