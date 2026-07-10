@@ -100,26 +100,33 @@ docker build -t atomicnet . && docker run -p 8080:8080 -e SEED_DEMO=1 atomicnet
 ## ✅ Deployed on Canton DevNet
 
 **AtomicNet runs on the real Canton Network.** The hardened model DAR (`atomicnet-model-0.2.0`)
-is deployed to the hackathon's shared DevNet validator (Canton 3.5.7), our 8 parties live under
-its namespace, and the full **20 → 3 atomic netting cycle has settled on-ledger** (2026-07-09):
+is deployed to the hackathon's shared DevNet validator (Canton 3.5.7), our 8 parties are live under
+its namespace, the full **20 → 3 atomic netting cycle has settled on-ledger**, and a fresh cycle is
+**staged and interactive right now** for reviewers to approve and settle themselves.
 
-- Parties: `atomicnet-operator-1`, `atomicnet-sub-{us,uk,de,fr,sg}-1`, `atomicnet-bank-1`,
-  `atomicnet-regulator-1` — all under namespace `1220a14ca128…b14e5acf8`
-- Cycle `CYCLE-1783619153596` — 20 invoices → 3 net payments, **status `Settled`** (the cycle
-  was transitioned Locked→Settled *inside* `ExecuteSettlement`, bound to the on-ledger approvals),
-  net deltas applied exactly (US −700 / UK +500 / DE −300 / FR +500 / SG 0), Sub_SG nets to zero,
-  and Sub_UK's ledger view shows only its own 8 invoices — privacy enforced by the network itself.
-- The settlement ran on package `7712f358…` (only the 0.2.0 model carries the `cycle`/`approvals`
-  gate fields, so a successful settle proves the hardened model executed on-ledger).
+- **Parties (8, live):** `atomicnet-operator-1`, `atomicnet-sub-{us,uk,de,fr,sg}-1`,
+  `atomicnet-bank-1`, `atomicnet-regulator-1` — all under namespace `1220a14ca128…b14e5acf8`.
+- **Settled on-ledger (2026-07-09):** cycle `CYCLE-1783619153596` — 20 invoices → 3 net payments,
+  transitioned **`Locked`→`Settled` *inside* `ExecuteSettlement`** (bound to the on-ledger approvals),
+  net deltas applied exactly (US −700 / UK +500 / DE −300 / FR +500 / SG 0), Sub_SG nets to zero, and
+  Sub_UK's ledger view shows only its own 8 invoices — privacy enforced by the network itself. It ran
+  on package `7712f358…` (only the 0.2.0 model carries the `cycle`/`approvals` gate fields, so a
+  successful settle proves the hardened model executed on-ledger).
+- **Live right now — settle it yourself:** cycle `CYCLE-1783638868419` is **`Locked`** with its net
+  positions already computed and frozen on-ledger (US −700 / UK +500 / DE −300 / FR +500 / SG 0,
+  Σ = 0, a clean 20 → 3), awaiting each subsidiary's on-ledger `ApproveNetPosition`. Open the console
+  at **[atomicnet-devnet-production.up.railway.app/app](https://atomicnet-devnet-production.up.railway.app/app)**,
+  switch parties to approve each position, then click Execute — the atomic settle runs against the real
+  validator, writes enabled. (State is live and moves as reviewers interact; a shared DevNet resets quarterly.)
 
-Run it against DevNet: create `.env.devnet` with the hackathon validator's endpoint + OIDC
+Run it against DevNet yourself: create `.env.devnet` with the hackathon validator's endpoint + OIDC
 client credentials (see the pinned access PDF in the hackathon Discord) plus
 `PARTY_HINT_PREFIX=atomicnet- PARTY_HINT_SUFFIX=-1 PARTY_NAMESPACE=<shared namespace>
-LEDGER_USER_ID=<token user>`, then
-`node --env-file=../.env.devnet src/api/server.ts` — the same app, pointed at the real network.
-The always-on public demo link stays on the self-contained sandbox (DevNet is a shared,
-quarterly-reset environment); [deploy/devnet/](deploy/devnet/) documents both this shared-validator
-path and the self-run Splice validator path.
+LEDGER_USER_ID=<token user>`, then `node --env-file=../.env.devnet src/api/server.ts` — the same app,
+pointed at the real network. A self-contained sandbox build (its own bundled validator, no shared
+credentials) runs at [atomicnet-production.up.railway.app](https://atomicnet-production.up.railway.app)
+as an always-on fallback; [deploy/devnet/](deploy/devnet/) documents both the shared-validator path
+and the self-run Splice validator path.
 
 ## Honest scope (MVP vs production)
 
